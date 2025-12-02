@@ -1,6 +1,6 @@
 ## Process this file with automake to produce Makefile.in
 
-noinst_LTLIBRARIES = libgui-stub.la
+noinst_LTLIBRARIES = libgui-irrlicht.la
 AM_CPPFLAGS = \
 	-I. \
 	-I$(srcdir)/.. \
@@ -10,9 +10,9 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/common/networking \
 	-I$(top_srcdir)/dependencies/tinycthread \
 	-I$(top_srcdir)/gen_headers/enums \
-        -I$(top_srcdir)/common $(gui_stub_cflags)
+        -I$(top_srcdir)/common $(gui_irrlicht_cflags)
 
-libgui_stub_la_SOURCES = \
+libgui_irrlicht_la_SOURCES = \
 	canvas.c	\
 	canvas.h	\
 	chatline.c	\
@@ -37,7 +37,7 @@ libgui_stub_la_SOURCES = \
 	graphics.h	\
 	gui_main.c	\
 	gui_main.h	\
-	gui_stub.h	\
+	gui_irrlicht.h	\
 	helpdlg.c	\
 	helpdlg.h	\
 	infradlg.c	\
