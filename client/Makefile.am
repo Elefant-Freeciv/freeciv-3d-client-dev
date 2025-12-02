@@ -29,6 +29,10 @@ if CLIENT_GUI_STUB
 GUI_SUBDIRS += gui-stub
 endif
 
+if CLIENT_GUI_IRRLICHT
+GUI_SUBDIRS += gui-irrlicht
+endif
+
 ALL_AUDIO_SDL_FILES = audio_sdl.c audio_sdl.h
 
 if AUDIO_SDL
@@ -275,4 +279,19 @@ freeciv_stub_LDADD = \
  $(INTLLIBS) $(CLIENT_LIBS) $(CLIENTICON) \
  $(TINYCTHR_LIBS) $(MAPIMG_WAND_LIBS) \
  $(gui_stub_libs)
+endif
+
+if CLIENT_GUI_IRRLICHT
+bin_PROGRAMS += freeciv-irrlicht
+noinst_LTLIBRARIES += libfcgui-irrlicht.la
+libfcgui_irrlicht_la_SOURCES = $(freeciv_client_src)
+libfcgui_irrlicht_la_LIBADD = gui-irrlicht/libgui-irrlicht.la $(clientlibs)
+freeciv_irrlicht_SOURCES = $(gui_interface_src) $(gui_cbs_src)
+freeciv_irrlicht_LDFLAGS = $(gui_stub_ldflags)
+freeciv_irrlicht_LDADD = \
+ libfcgui-irrlicht.la $(SOUND_LIBS) gui-irrlicht/gui_main.lo \
+ $(top_builddir)/common/libfreeciv.la \
+ $(INTLLIBS) $(CLIENT_LIBS) $(CLIENTICON) \
+ $(TINYCTHR_LIBS) $(MAPIMG_WAND_LIBS) \
+ $(gui_irrlicht_libs)
 endif
