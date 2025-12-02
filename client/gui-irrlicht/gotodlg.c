@@ -23,7 +23,7 @@
 #include "control.h"
 
 /* gui main header */
-#include "gui_stub.h"
+#include "gui_irrlicht.h"
 
 #include "gotodlg.h"
 

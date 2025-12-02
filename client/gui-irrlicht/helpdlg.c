@@ -19,7 +19,7 @@
 #include "fcintl.h"
 
 /* gui main header */
-#include "gui_stub.h"
+#include "gui_irrlicht.h"
 
 #include "helpdlg.h"
 

@@ -21,7 +21,7 @@
 #include "themes_common.h"
 
 /* gui main header */
-#include "gui_stub.h"
+#include "gui_irrlicht.h"
 
 /* client/include */
 #include "themes_g.h"

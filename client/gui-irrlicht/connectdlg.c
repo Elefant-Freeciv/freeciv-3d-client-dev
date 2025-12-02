@@ -23,7 +23,7 @@
 #include "support.h"
 
 /* gui main header */
-#include "gui_stub.h"
+#include "gui_irrlicht.h"
 
 #include "connectdlg_g.h"
 

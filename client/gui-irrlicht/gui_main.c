@@ -23,7 +23,7 @@
 #include "log.h"
 
 /* gui main header */
-#include "gui_stub.h"
+#include "gui_irrlicht.h"
 
 /* client */
 #include "gui_cbsetter.h"

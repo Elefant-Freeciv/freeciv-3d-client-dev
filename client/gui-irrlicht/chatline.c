@@ -19,7 +19,7 @@
 #include "climisc.h"      /* for write_chatline_content */
 
 /* gui main header */
-#include "gui_stub.h"
+#include "gui_irrlicht.h"
 
 #include "chatline.h"
 

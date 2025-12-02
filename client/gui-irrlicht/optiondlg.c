@@ -19,7 +19,7 @@
 #include "log.h"
 
 /* gui main header */
-#include "gui_stub.h"
+#include "gui_irrlicht.h"
 
 #include "optiondlg.h"
 

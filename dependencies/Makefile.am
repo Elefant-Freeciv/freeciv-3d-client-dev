@@ -12,7 +12,7 @@ else
 TINYCTHRDIR =
 endif
 
-SUBDIRS = $(LUASUBDIR) tolua-5.2 cvercmp $(TINYCTHRDIR)
+SUBDIRS = $(LUASUBDIR) tolua-5.2 cvercmp irrlicht-1.8.5 $(TINYCTHRDIR)
 
 if FCDB_DB
 SUBDIRS += luasql

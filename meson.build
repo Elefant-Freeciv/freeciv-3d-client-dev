@@ -4210,6 +4210,52 @@ executable('freeciv-stub',
 
 endif
 
+if get_option('clients').contains('irrlicht')
+
+executable('freeciv-irrlicht',
+  'client/gui_cbsetter.c',
+  'client/gui_interface.c',
+  'client/gui-irrlicht/canvas.c',
+  'client/gui-irrlicht/chatline.c',
+  'client/gui-irrlicht/citydlg.c',
+  'client/gui-irrlicht/cityrep.c',
+  'client/gui-irrlicht/colors.c',
+  'client/gui-irrlicht/connectdlg.c',
+  'client/gui-irrlicht/dialogs.c',
+  'client/gui-irrlicht/diplodlg.c',
+  'client/gui-irrlicht/finddlg.c',
+  'client/gui-irrlicht/gotodlg.c',
+  'client/gui-irrlicht/graphics.c',
+  'client/gui-irrlicht/gui_main.c',
+  'client/gui-irrlicht/helpdlg.c',
+  'client/gui-irrlicht/infradlg.c',
+  'client/gui-irrlicht/inteldlg.c',
+  'client/gui-irrlicht/luaconsole.c',
+  'client/gui-irrlicht/mapctrl.c',
+  'client/gui-irrlicht/mapview.c',
+  'client/gui-irrlicht/menu.c',
+  'client/gui-irrlicht/messagedlg.c',
+  'client/gui-irrlicht/messagewin.c',
+  'client/gui-irrlicht/optiondlg.c',
+  'client/gui-irrlicht/pages.c',
+  'client/gui-irrlicht/plrdlg.c',
+  'client/gui-irrlicht/ratesdlg.c',
+  'client/gui-irrlicht/repodlgs.c',
+  'client/gui-irrlicht/spaceshipdlg.c',
+  'client/gui-irrlicht/sprite.c',
+  'client/gui-irrlicht/themes.c',
+  'client/gui-irrlicht/voteinfo_bar.c',
+  'client/gui-irrlicht/wldlg.c',
+  clienticon,
+  include_directories: client_inc,
+  dependencies: [audio_dep, net_dep, gettext_dep, mw_extra_dep],
+  link_with: client_common,
+  install: true,
+  win_subsystem: 'console'
+  )
+
+endif
+
 if get_option('fcmp') != []
 
 fcmp_common = static_library('fcmp_common',

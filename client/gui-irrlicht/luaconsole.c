@@ -22,7 +22,7 @@
 #include "featured_text.h"
 
 /* gui main header */
-#include "gui_stub.h"
+#include "gui_irrlicht.h"
 
 #include "luaconsole.h"
 
