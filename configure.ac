@@ -462,7 +462,7 @@ dnl auto: Autodetect one.
 dnl all:  Autodetect as many as possible.
 dnl comma-separated-list: Detect these or abort.
 AC_ARG_ENABLE([client],
-  AS_HELP_STRING([--enable-client=auto/all/gtk3.22/sdl2/qt/gtk4/gtk4x/stub],
+  AS_HELP_STRING([--enable-client=auto/all/gtk3.22/sdl2/qt/gtk4/gtk4x/stub/irrlicht],
                  [clients to compile [auto](list for multiple)]),
 [clients=${enableval}],
 [client=auto])
@@ -473,6 +473,7 @@ gui_gtk5=no
 gui_sdl2=no
 gui_qt=no
 gui_stub=no
+gui_irrlicht=no
 
 for gui in $(echo $clients | $SED 's/,/ /g') ; do
   if test "x$gui" = "xno" ; then
@@ -1090,6 +1091,14 @@ if test "x$client" != "xno"; then
     fi
     gui_stub_libs="-lm"
   fi
+  
+  if test "x$gui_irrlicht" = "xyes" || test "x$client" = "xall" ; then
+    gui_irrlicht=yes
+    if test "x$client" = "xauto" ; then
+      client=yes
+    fi
+    gui_irrlicht_libs="-lm"
+  fi
 
   dnl If client still "auto", error out since we couldn't select any of them
   if test "x$client" = "xauto" ; then
@@ -1103,7 +1112,8 @@ if test "x$client" = "xall" ; then
      test "x$gui_gtk5" = "xyes" ||
      test "x$gui_sdl2" = "xyes" ||
      test "x$gui_qt" = "xyes" ||
-     test "x$gui_stub" = "xyes" ; then
+     test "x$gui_stub" = "xyes" ||
+     test "x$gui_irrlicht" = "xyes"; then
     client=yes
   else
     client=no
@@ -1463,6 +1473,9 @@ AC_SUBST([gui_qt_ldflags])
 AC_SUBST([gui_stub_cflags])
 AC_SUBST([gui_stub_libs])
 AC_SUBST([gui_stub_ldflags])
+AC_SUBST([gui_irrlicht_cflags])
+AC_SUBST([gui_irrlicht_libs])
+AC_SUBST([gui_irrlicht_ldflags])
 AC_SUBST([mp_cli_cflags])
 AC_SUBST([mp_cli_libs])
 AC_SUBST([mp_cli_ldflags])
@@ -1494,6 +1507,7 @@ AM_CONDITIONAL(CLIENT_GUI_GTK_4, test "x$gui_gtk4" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_GTK_5, test "x$gui_gtk5" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_QT, test "x$gui_qt" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_STUB, test "x$gui_stub" = "xyes")
+AM_CONDITIONAL(CLIENT_GUI_IRRLICHT, test "x$gui_irrlicht" = "xyes")
 AM_CONDITIONAL(MINGW, test x"$MINGW" = "xyes")
 
 dnl Additional client libraries:
@@ -1963,6 +1977,7 @@ AC_CONFIG_FILES([Makefile
           client/gui-gtk-5.0/Makefile
           client/gui-qt/Makefile
           client/gui-stub/Makefile
+          client/gui-irrlicht/Makefile
           client/luascript/Makefile
           server/Makefile
           server/advisors/Makefile
@@ -2039,6 +2054,7 @@ AC_MSG_NOTICE([
     QT:      $gui_qt
     SDL2:    $gui_sdl2
     Stub:    $gui_stub
+    Irrlicht:    $gui_irrlicht
 
   In-development client frontends:
    (these are not yet ready for general use)
