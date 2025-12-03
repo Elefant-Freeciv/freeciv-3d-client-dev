@@ -1173,7 +1173,7 @@ server_inc = [common_inc, include_directories('server', 'server/advisors',
               'server/savegame', 'ai', 'ai/classic')]
 
 client_inc = [common_inc, include_directories('client', 'client/include',
-              'client/luascript', 'client/agents')]
+              'client/luascript', 'client/agents', 'dependencies/irrlicht/include')]
 
 tool_inc = [server_inc, include_directories('tools/ruleutil', 'tools/shared')]
 
@@ -4212,6 +4212,12 @@ endif
 
 if get_option('clients').contains('irrlicht')
 
+src_dir = meson.current_source_dir()
+message(src_dir)
+irr_dir = join_paths(src_dir, 'dependencies/irrlicht/lib')
+message(irr_dir)
+irrlicht = c_compiler.find_library('Irrlicht', dirs: irr_dir, required : true)
+
 executable('freeciv-irrlicht',
   'client/gui_cbsetter.c',
   'client/gui_interface.c',
@@ -4248,7 +4254,7 @@ executable('freeciv-irrlicht',
   'client/gui-irrlicht/wldlg.c',
   clienticon,
   include_directories: client_inc,
-  dependencies: [audio_dep, net_dep, gettext_dep, mw_extra_dep],
+  dependencies: [audio_dep, net_dep, gettext_dep, mw_extra_dep, irrlicht],
   link_with: client_common,
   install: true,
   win_subsystem: 'console'
