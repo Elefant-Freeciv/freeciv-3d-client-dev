@@ -5407,14 +5407,19 @@ static int fill_fog_sprite_array(const struct tileset *t,
 {
   struct drawn_sprite *saved_sprs = sprs;
 
-  if (t->fogstyle == FOG_SPRITE && gui_options.draw_fog_of_war
+  if (t->fogstyle == FOG_SPRITE && t->sprites.tx.fog
+      && gui_options.draw_fog_of_war
       && NULL != ptile
       && TILE_KNOWN_UNSEEN == client_tile_get_known(ptile)) {
     /* With FOG_AUTO, fog is done this way. */
     ADD_SPRITE_SIMPLE(t->sprites.tx.fog);
   }
 
+  /* gui-irrlicht: guard fullfog (only allocated for DARKNESS_CORNER tilesets
+   * that actually load their t.fog_* sprites; some square tilesets leave it
+   * NULL, and fullfog[tileno] would dereference NULL below). */
   if (t->darkness_style == DARKNESS_CORNER && pcorner
+      && t->sprites.tx.fullfog
       && gui_options.draw_fog_of_war) {
     int i, tileno = 0;
 
@@ -6803,12 +6808,16 @@ struct unit *get_drawable_unit(const struct tileset *t,
     return NULL;
   }
 
-  if (!unit_is_in_focus(punit)
-      || t->sprites.unit.select != nullptr || focus_unit_state) {
-    return punit;
-  } else {
-    return NULL;
-  }
+  /* Keep focused units visible. A focused unit is drawn on LAYER_FOCUS_UNIT
+   * (XOR excludes it from LAYER_UNIT, so it is not double-drawn) using its
+   * normal sprite. Previously, when a focused unit's tileset had no select
+   * sprite AND focus_unit_state was in the "blink off" phase, this returned
+   * NULL and the unit was hidden on EVERY layer -- invisible. This bites the
+   * 'trident' tileset (no unit select sprite) combined with the auto-selected
+   * first unit on a fresh game. Always return the unit so it never vanishes.
+   * (Tilesets WITH a select sprite are unaffected: they returned punit here
+   * via the old 'select != nullptr' clause regardless.) */
+  return punit;
 }
 
 /************************************************************************//**
@@ -7542,6 +7551,35 @@ int fill_basic_road_sprite_array(const struct tileset *t,
   image of the given base type. The image is suitable for use as an icon
   for the base type, for example.
 ****************************************************************************/
+struct sprite *get_tile_resource_sprite(const struct tileset *t,
+                                        const struct extra_type *pextra)
+{
+  const struct anim *a;
+  int idx;
+
+  if (!t || !pextra) {
+    return NULL;
+  }
+
+  idx = extra_index(pextra);
+  if (!(0 <= idx && idx < game.control.num_extra_types)) {
+    return NULL;
+  }
+
+  /* The resource graphics are 1-frame animations; frame 0 is the sprite.
+   * Prefer the foreground layer, fall back to the background so a resource
+   * always has *something* to show. */
+  a = t->sprites.extras[idx].u.bmf.foreground;
+  if (a != NULL && a->sprites[0] != NULL) {
+    return a->sprites[0];
+  }
+  a = t->sprites.extras[idx].u.bmf.background;
+  if (a != NULL && a->sprites[0] != NULL) {
+    return a->sprites[0];
+  }
+  return NULL;
+}
+
 int fill_basic_base_sprite_array(const struct tileset *t,
                                  struct drawn_sprite *sprs,
                                  const struct extra_type *pextra)

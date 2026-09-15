@@ -384,6 +384,11 @@ struct sprite *get_unittype_sprite(const struct tileset *t,
                                    enum direction8 facing);
 struct sprite *get_sample_city_sprite(const struct tileset *t,
                                       int style_idx);
+/* Return the representative sprite for a tile's resource (bonus/ore), or NULL
+ * if the tileset has no graphic for it. Used by the gui-irrlicht 3D view to
+ * draw resource billboards (the extras sprites are not otherwise exposed). */
+struct sprite *get_tile_resource_sprite(const struct tileset *t,
+                                        const struct extra_type *pextra);
 struct sprite *get_arrow_sprite(const struct tileset *t,
                                 enum arrow_type arrow);
 struct sprite *get_tax_sprite(const struct tileset *t, Output_type_id otype);

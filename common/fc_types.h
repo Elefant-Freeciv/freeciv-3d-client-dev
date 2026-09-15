@@ -631,6 +631,8 @@ BV_DEFINE(bv_startpos_nations, MAX_NUM_STARTPOS_NATIONS);
 #define SPECENUM_VALUE9NAME "gtk4"
 #define SPECENUM_VALUE10 GUI_GTK5
 #define SPECENUM_VALUE10NAME "gtk4x"
+#define SPECENUM_VALUE11 GUI_IRRLICHT
+#define SPECENUM_VALUE11NAME "irrlicht"
 #include "specenum_gen.h"
 
 /* Used in the network protocol. */

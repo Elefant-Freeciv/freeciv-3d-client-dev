@@ -689,7 +689,15 @@ moves. Includes MAP_MAX_LINEAR_SIZE because a map can be non wrapping. */
 #define MAP_DEFAULT_TOPO         0
 #define MAP_DEFAULT_WRAP         WRAP_X
 #else /* FREECIV_WEB */
-#define MAP_DEFAULT_TOPO         (TF_ISO|TF_HEX)
+/* This project forces SQUARE tiles: the Irrlicht client (gui-irrlicht) is built
+ * around a square ("Trident"/3d) tileset and a square x/y tile grid (its 3D view
+ * places tiles at integer (x,0,y) positions). The stock native default is
+ * isometric+hexagonal (TF_ISO|TF_HEX), which is incompatible with the square
+ * tileset (rendered as "malformed" tiles) -- and the server console cannot set
+ * topology back to square (only 'iso'/'hex' tokens exist, no 0/none). So the
+ * default is square here; the topology option can still be set to iso/hex for
+ * other tilesets if ever needed. */
+#define MAP_DEFAULT_TOPO         0
 #define MAP_DEFAULT_WRAP         (WRAP_X)
 #endif /* FREECIV_WEB */
 

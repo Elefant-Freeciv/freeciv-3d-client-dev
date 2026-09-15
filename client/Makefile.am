@@ -25,6 +25,10 @@ if CLIENT_GUI_QT
 GUI_SUBDIRS += gui-qt
 endif
 
+if CLIENT_GUI_IRRLICHT
+GUI_SUBDIRS += gui-irrlicht
+endif
+
 if CLIENT_GUI_STUB
 GUI_SUBDIRS += gui-stub
 endif
@@ -67,7 +71,8 @@ AM_CPPFLAGS = \
 	$(CLIENT_CFLAGS) $(SOUND_CFLAGS) \
 	-I$(top_srcdir)/dependencies/cvercmp \
 	-I$(top_srcdir)/dependencies/tinycthread \
-	-I$(top_srcdir)/gen_headers/enums
+	-I$(top_srcdir)/gen_headers/enums \
+	$(gui_irrlicht_cppflags)
 
 AM_LIBTOOLFLAGS = --preserve-dup-deps
 
@@ -260,6 +265,21 @@ freeciv_qt_LDADD = \
  $(INTLLIBS) $(CLIENT_LIBS) $(CLIENTICON) \
  $(TINYCTHR_LIBS) $(MAPIMG_WAND_LIBS) \
  $(gui_qt_libs)
+endif
+
+if CLIENT_GUI_IRRLICHT
+bin_PROGRAMS += freeciv-irrlicht
+noinst_LTLIBRARIES += libfcgui-irrlicht.la
+libfcgui_irrlicht_la_SOURCES = $(freeciv_client_src)
+libfcgui_irrlicht_la_LIBADD = gui-irrlicht/libgui-irrlicht.la $(clientlibs)
+freeciv_irrlicht_SOURCES = dummycxx.cpp $(gui_interface_src)
+freeciv_irrlicht_LDFLAGS = $(gui_irrlicht_ldflags)
+freeciv_irrlicht_LDADD = \
+ libfcgui-irrlicht.la $(SOUND_LIBS) gui-irrlicht/gui_main.lo \
+ $(top_builddir)/common/libfreeciv.la \
+ $(INTLLIBS) $(CLIENT_LIBS) $(CLIENTICON) \
+ $(TINYCTHR_LIBS) $(MAPIMG_WAND_LIBS) \
+ $(gui_irrlicht_libs)
 endif
 
 if CLIENT_GUI_STUB

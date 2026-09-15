@@ -462,7 +462,7 @@ dnl auto: Autodetect one.
 dnl all:  Autodetect as many as possible.
 dnl comma-separated-list: Detect these or abort.
 AC_ARG_ENABLE([client],
-  AS_HELP_STRING([--enable-client=auto/all/gtk3.22/sdl2/qt/gtk4/gtk4x/stub],
+  AS_HELP_STRING([--enable-client=auto/all/gtk3.22/sdl2/qt/gtk4/gtk4x/irrlicht/stub],
                  [clients to compile [auto](list for multiple)]),
 [clients=${enableval}],
 [client=auto])
@@ -473,6 +473,7 @@ gui_gtk5=no
 gui_sdl2=no
 gui_qt=no
 gui_stub=no
+gui_irrlicht=no
 
 for gui in $(echo $clients | $SED 's/,/ /g') ; do
   if test "x$gui" = "xno" ; then
@@ -505,6 +506,11 @@ AC_ARG_WITH([3d],
   [AS_HELP_STRING([--with-3d], [build WIP 3D support to gtk3.22-client])],
   [AC_DEFINE([GTK3_3D_ENABLED], [1], [3D support built to gtk3.22-client])
    enable_3d=true])
+
+AC_ARG_WITH([irrlicht],
+  [AS_HELP_STRING([--with-irrlicht=DIR], [Irrlicht Engine prefix with include/ and lib/ for the 3D client])],
+  [irrlicht_prefix="$withval"],
+  [irrlicht_prefix=""])
 
 gui_3d_libs=""
 if test x$enable_3d = xtrue ; then
@@ -1079,6 +1085,9 @@ if test "x$client" != "xno"; then
   dnl SDL2-specific overrides
   FC_SDL2_CLIENT
 
+  dnl Irrlicht 3D-specific overrides
+  FC_IRRLICHT_CLIENT
+
   dnl Gtk-5.0-specific overrides
   FC_GTK5_CLIENT
 
@@ -1103,6 +1112,7 @@ if test "x$client" = "xall" ; then
      test "x$gui_gtk5" = "xyes" ||
      test "x$gui_sdl2" = "xyes" ||
      test "x$gui_qt" = "xyes" ||
+     test "x$gui_irrlicht" = "xyes" ||
      test "x$gui_stub" = "xyes" ; then
     client=yes
   else
@@ -1460,6 +1470,10 @@ AC_SUBST([gui_qt_cflags])
 AC_SUBST([gui_qt_cxxflags])
 AC_SUBST([gui_qt_libs])
 AC_SUBST([gui_qt_ldflags])
+AC_SUBST([gui_irrlicht_cppflags])
+AC_SUBST([gui_irrlicht_cxxflags])
+AC_SUBST([gui_irrlicht_libs])
+AC_SUBST([gui_irrlicht_ldflags])
 AC_SUBST([gui_stub_cflags])
 AC_SUBST([gui_stub_libs])
 AC_SUBST([gui_stub_ldflags])
@@ -1493,6 +1507,7 @@ AM_CONDITIONAL(CLIENT_GUI_GTK_3_22, test "x$gui_gtk3_22" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_GTK_4, test "x$gui_gtk4" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_GTK_5, test "x$gui_gtk5" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_QT, test "x$gui_qt" = "xyes")
+AM_CONDITIONAL(CLIENT_GUI_IRRLICHT, test "x$gui_irrlicht" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_STUB, test "x$gui_stub" = "xyes")
 AM_CONDITIONAL(MINGW, test x"$MINGW" = "xyes")
 
@@ -1962,6 +1977,7 @@ AC_CONFIG_FILES([Makefile
           client/gui-gtk-4.0/Makefile
           client/gui-gtk-5.0/Makefile
           client/gui-qt/Makefile
+          client/gui-irrlicht/Makefile
           client/gui-stub/Makefile
           client/luascript/Makefile
           server/Makefile
@@ -2038,6 +2054,7 @@ AC_MSG_NOTICE([
     Gtk-4.0: $gui_gtk4
     QT:      $gui_qt
     SDL2:    $gui_sdl2
+    Irrlicht: $gui_irrlicht
     Stub:    $gui_stub
 
   In-development client frontends:

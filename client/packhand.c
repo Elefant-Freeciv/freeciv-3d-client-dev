@@ -2231,8 +2231,28 @@ void handle_unit_short_info(const struct packet_unit_short_info *packet)
 /************************************************************************//**
   Server requested topology change.
 ****************************************************************************/
+/* gui-irrlicht: this client is built around SQUARE tiles (the "3d"/Trident
+ * square tileset + a square x/y grid). The stock native server default is
+ * isometric+hexagonal, so (a) our own server defaults to square (see
+ * MAP_DEFAULT_TOPO in common/map.h) and (b) here we force square topology on
+ * the client for any server that is not, so the map always renders as square
+ * tiles instead of the iso/hex layout the square tileset can't draw (the
+ * "malformed tiles" the square tileset produces on a hex map). Disable with
+ * FC_IRR_SQRT=0 to follow the server's real topology (e.g. to view an iso/hex
+ * server with a matching tileset). */
+static bool irrg_force_square_topo(void)
+{
+  static int cache = -1;
+  if (cache < 0) {
+    const char *e = getenv("FC_IRR_SQRT");
+    cache = (e && e[0] == '0') ? 0 : 1;
+  }
+  return cache == 1;
+}
+
 void handle_set_topology(int topology_id, int wrap_id)
 {
+  if (irrg_force_square_topo()) topology_id = 0;   /* force square tiles */
   wld.map.topology_id = topology_id;
   wld.map.wrap_id = wrap_id;
 
@@ -2278,7 +2298,8 @@ void handle_map_info(const struct packet_map_info *packet)
                   describe_topology(packet->topology_id), describe_topology(ts_topo));
   }
 
-  wld.map.topology_id = packet->topology_id;
+  /* gui-irrlicht: force square tiles (see irrg_force_square_topo above). */
+  wld.map.topology_id = (irrg_force_square_topo() ? 0 : packet->topology_id);
   wld.map.wrap_id = packet->wrap_id;
 
   map_init_topology(&(wld.map));
