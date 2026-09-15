@@ -107,13 +107,15 @@ std::string terrain_obj(const struct terrain *t)
   if (n.find("mountain") != std::string::npos) return "mountain/mountain.obj";
   if (n.find("volcanic") != std::string::npos) return "mountain/mountain.obj";
   if (n.find("swamp")    != std::string::npos) return "swamp/swamp.obj";
-  if (n.find("ice")      != std::string::npos) return "ice/ice.obj";
+  if (n.find("glacier")  != std::string::npos) return "ice/ice.obj";    /* classic glacier -> ice art */
+  if (n.find("ice")      != std::string::npos) return "ice/ice.obj";    /* icecap / ice field */
   if (n.find("jungle")   != std::string::npos) return "forest/forest.obj";
   if (n.find("forest")   != std::string::npos) return "forest/forest.obj";
   if (n.find("coast")    != std::string::npos) return "coast/coast.obj";
+  if (n.find("lake")     != std::string::npos) return "water/water.obj";    /* lakes -> water art */
   if (n.find("river")    != std::string::npos) return "water/water.obj";
-  if (n.find("deep")     != std::string::npos) return "ocean/ocean.obj";
-  if (n.find("ocean")    != std::string::npos) return "ocean/ocean.obj";
+  if (n.find("deep")     != std::string::npos) return "ocean/ocean.obj";   /* deep sea (before "ocean") */
+  if (n.find("ocean")    != std::string::npos) return "coast/coast.obj";   /* near-land sea -> shoreline art */
   if (n.find("water")    != std::string::npos) return "water/water.obj";
   if (n.find("city")     != std::string::npos) return "grass/grass.obj";
   if (terrain_type_terrain_class(t) == TC_OCEAN) return "ocean/ocean.obj";
@@ -137,11 +139,21 @@ std::string terrain_obj(const struct terrain *t)
  * broken shape. */
 static bool terrain_has_oriented(const struct terrain *t)
 {
-  std::string n = tolower_str(untranslated_name(&t->name));
-  return n.find("coast")  != std::string::npos
-      || n.find("desert") != std::string::npos
-      || n.find("plains") != std::string::npos
-      || n.find("ice")    != std::string::npos;
+  // A terrain uses the 16-slice directional variants iff its base .obj's art dir
+  // ships them. Exactly 7 dirs do (see the art/terrain layout -- each holds
+  // <stem>.obj + <stem>0..15.obj):  coast desert ice plains swamp tundra water.
+  // Match by the art dir (the base .obj path from terrain_obj) rather than the
+  // FreeCiv terrain name, so it stays correct even when several terrain names
+  // map to the same art (e.g. glacier+ice->ice, river+lake->water, ocean->coast).
+  static const char *oriented_dirs[] = {
+    "coast", "desert", "ice", "plains", "swamp", "tundra", "water"
+  };
+  std::string base = terrain_obj(t);              // "<dir>/<dir>.obj"
+  size_t slash = base.rfind('/');
+  std::string dir = (slash != std::string::npos) ? base.substr(0, slash) : "";
+  for (const char *d : oriented_dirs)
+    if (dir == d) return true;
+  return false;
 }
 
 /* Oriented (directional) variant index for a tile. This replicates Main.cpp's
