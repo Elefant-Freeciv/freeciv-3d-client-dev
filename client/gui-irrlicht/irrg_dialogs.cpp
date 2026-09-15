@@ -524,6 +524,57 @@ static void irrg_draw_unit_dialog(struct canvas *cv)
 }
 
 /* ------------------------------------------------------------------ */
+/* End Turn button (top-right). A persistent, always-available command in the
+ * in-game view -- unlike the unit action bar, it does not need a focused unit.
+ * Clicking it ends the current player's turn (same path as the in-game menu). */
+static int g_et_x = 0, g_et_y = 0, g_et_w = 0, g_et_h = 28;
+static int g_et_mx = -1, g_et_my = -1;
+
+void irrg_draw_endturn_button(struct canvas *cv)
+{
+  if (!cv) return;
+  if (client_state() != C_S_RUNNING) return;
+  if (irrg_city_dialog_is_open()) return;    /* hidden while a modal is up */
+  static struct color c_etbg     = { 22, 24, 30 };
+  static struct color c_etbdr    = { 125, 135, 160 };
+  static struct color c_ettx     = { 226, 229, 239 };
+  static struct color c_ethover  = { 46, 56, 82 };    /* lighter fill on hover */
+  static struct color c_ethoverb = { 120, 205, 255 }; /* bright border on hover */
+  const char *label = "End Turn";
+  int tw = 0, th = 0;
+  irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, label);
+  g_et_w = tw + 20;
+  g_et_h = th + 12;
+  g_et_x = cv->width - g_et_w - 10;
+  g_et_y = 8;
+  bool hovered = (g_et_mx >= g_et_x && g_et_mx < g_et_x + g_et_w
+                  && g_et_my >= g_et_y && g_et_my < g_et_y + g_et_h);
+  struct color fill = hovered ? c_ethover : c_etbg;
+  struct color bdr  = hovered ? c_ethoverb : c_etbdr;
+  canvas_put_rectangle(cv, &fill, g_et_x, g_et_y, g_et_w, g_et_h);
+  canvas_put_rectangle(cv, &bdr,  g_et_x, g_et_y, g_et_w, 2);
+  canvas_put_rectangle(cv, &bdr,  g_et_x, g_et_y + g_et_h - 2, g_et_w, 2);
+  canvas_put_rectangle(cv, &bdr,  g_et_x, g_et_y, 2, g_et_h);
+  canvas_put_rectangle(cv, &bdr,  g_et_x + g_et_w - 2, g_et_y, 2, g_et_h);
+  canvas_put_text(cv, g_et_x + (g_et_w - tw) / 2, g_et_y + (g_et_h - th) / 2,
+                  FONT_REQTREE_TEXT, &c_ettx, label);
+}
+
+bool irrg_endturn_button_hit(int mx, int my)
+{
+  if (client_state() != C_S_RUNNING) return false;
+  if (irrg_city_dialog_is_open()) return false;
+  if (g_et_x <= 0) return false;
+  return (mx >= g_et_x && mx < g_et_x + g_et_w
+          && my >= g_et_y && my < g_et_y + g_et_h);
+}
+
+void irrg_endturn_mouse_move(int mx, int my)
+{
+  g_et_mx = mx;
+  g_et_my = my;
+}
+
 void irrg_draw_dialogs(struct canvas *cv)
 {
   if (!cv) return;
@@ -563,6 +614,9 @@ void irrg_draw_dialogs(struct canvas *cv)
     canvas_put_rectangle(cv, &c_hintbg, 5, 6 + th + 6, tw2 + 6, th2 + 4);
     canvas_put_text(cv, 8, 6 + th + 8, FONT_REQTREE_TEXT, &c_hinthy, line2);
   }
+
+  /* End Turn button (top-right) -- always available in-game, no unit needed. */
+  irrg_draw_endturn_button(cv);
 
   /* Selected-unit info panel (bottom-left corner) + the unit action buttons
    * (bottom centre) for the focused unit. Both work in the 3D and 2D views and

@@ -50,6 +50,12 @@ void irrg_log_open(void);
 void irrg_log_close(void);
 bool irrg_log_is_open(void);
 bool irrg_unit_dialog_hit(int mx, int my);
+/* End Turn button (top-right): draw it, hit-test it, and feed the cursor.
+ * Clicking it ends the current player's turn (irrg_interact.cpp dispatches
+ * user_ended_turn() when irrg_endturn_button_hit() is true on a left click). */
+void irrg_draw_endturn_button(struct canvas *cv);
+bool irrg_endturn_button_hit(int mx, int my);
+void irrg_endturn_mouse_move(int mx, int my);
 bool irrg_report_or_help_open(void);   /* true if a report/help/messages panel is up */
 int  irrg_close_topmost_report_or_help(void);
 

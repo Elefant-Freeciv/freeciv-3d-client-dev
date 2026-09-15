@@ -124,17 +124,17 @@ std::string terrain_obj(const struct terrain *t)
  *
  * coast / desert / ice / plains each ship 16 flat-quad .obj files
  * (name0.obj .. name15.obj) whose geometry is identical and differ only in UV:
- * they are 16 horizontal slices of a coastal/biome-edge texture atlas. We pick
- * the slice with a 4-bit mask over the four cardinal neighbours, setting a bit
- * whenever the neighbour is a *different terrain* than this tile -- so a coast
- * tile "faces" its water on the flagged sides, and a biome edge lights up
- * toward the neighbouring biome.
+ * they are 16 slices of a coastal/biome-edge texture atlas, one per combination
+ * of the four cardinal "edge" directions. The slice is chosen to match the demo
+ * (Main.cpp coast_dir): for each of the four cardinal neighbours that is a
+ * *different terrain* than this tile, a flag is set and the slice is looked up
+ * in the demo's table (see terrain_orient_index). So a coast tile "faces" its
+ * water on the flagged sides, and a biome edge lights up toward the neighbour.
  *
- * The exact bit-order/slice correspondence is an artist-asset convention that is
- * not documented in-tree, so it is best-effort here. The feature is toggleable
- * via FC_IRR_ORIENT (unset or "1" = on, "0" = off, which falls back to the
- * generic base mesh). Because the geometry is a flat quad, a "wrong" mapping can
- * only ever show a different-but-valid coast slice, never a broken shape. */
+ * The feature is toggleable via FC_IRR_ORIENT (unset or "1" = on, "0" = off,
+ * which falls back to the generic base mesh). Because the geometry is a flat
+ * quad, a "wrong" slice can only ever show a different-but-valid edge, never a
+ * broken shape. */
 static bool terrain_has_oriented(const struct terrain *t)
 {
   std::string n = tolower_str(untranslated_name(&t->name));
@@ -144,25 +144,64 @@ static bool terrain_has_oriented(const struct terrain *t)
       || n.find("ice")    != std::string::npos;
 }
 
-/* 4-bit biome-edge mask for a tile: N=1, E=2, S=4, W=8 (see above). */
+/* Oriented (directional) variant index for a tile. This replicates Main.cpp's
+ * coast_dir() EXACTLY. The .obj variant files (coast0.obj .. coast15.obj, and
+ * likewise desert/plains/ice) are named by a SPECIFIC permutation of the four
+ * cardinal "edge" flags -- NOT a plain bit mask. The demo scans the four
+ * cardinal neighbours and, for each one that is a *different terrain*, sets a
+ * flag, then picks the variant index from this table (last matching combination
+ * wins):
+ *
+ *   none=1   N=2   E=9   S=5   W=3
+ *   N+E=10   N+S=6   N+W=4   E+S=13   E+W=11   S+W=7
+ *   N+E+S=14   N+E+W=12   N+S+W=8   S+E+W=15   all=0
+ *
+ * (A plain 4-bit mask would e.g. give North-only = 1, but the assets use 2 --
+ * that mismatch is why the tiles were showing the wrong slice.)
+ *
+ * The 3D map is x-mirrored (see fx(): world +x is screen-left), so the demo's
+ * east/west slices would land on the wrong side of the tile. We swap the east
+ * and west flags before applying the table, so the biome edge faces the actual
+ * (mirrored) water side. North/south are unaffected by the mirror. */
 static int terrain_orient_index(struct tile *ptile)
 {
-  int mask = 0;
+  bool dn = false, de = false, ds = false, dw = false;
   const struct terrain *self = tile_terrain(ptile);
   struct tile *nb;
   enum direction8 d;
   cardinal_adjc_dir_iterate(&wld.map, ptile, nb, d) {
     if (tile_terrain(nb) != self) {
       switch (d) {
-      case DIR8_NORTH: mask |= 1; break;
-      case DIR8_EAST:  mask |= 8; break;   /* x-flip mirrors E<->W, so swap bits */
-      case DIR8_SOUTH: mask |= 4; break;
-      case DIR8_WEST:  mask |= 2; break;
+      case DIR8_NORTH: dn = true; break;
+      case DIR8_EAST:  de = true; break;
+      case DIR8_SOUTH: ds = true; break;
+      case DIR8_WEST:  dw = true; break;
       default: break;
       }
     }
   } cardinal_adjc_dir_iterate_end;
-  return mask;
+
+  /* x-mirror (fx): swap east/west so the edge faces the water on screen. */
+  bool N = dn, E = dw, S = ds, W = de;
+
+  /* Main.cpp coast_dir() table (last matching combination wins). */
+  int idx = 1;
+  if (N) idx = 2;
+  if (E) idx = 9;
+  if (S) idx = 5;
+  if (W) idx = 3;
+  if (N && E) idx = 10;
+  if (N && S) idx = 6;
+  if (N && W) idx = 4;
+  if (E && S) idx = 13;
+  if (E && W) idx = 11;
+  if (S && W) idx = 7;
+  if (N && E && S) idx = 14;
+  if (N && E && W) idx = 12;
+  if (N && S && W) idx = 8;
+  if (S && E && W) idx = 15;
+  if (N && E && S && W) idx = 0;
+  return idx;
 }
 
 /* Per-tile .obj path: the oriented variant when available + enabled, else the

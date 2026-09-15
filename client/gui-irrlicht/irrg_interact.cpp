@@ -112,6 +112,14 @@ static struct tile *irrg_screen_to_tile(int sx, int sy)
 /* Handle a left (select) or right (move/recenter) click on the map. */
 static void irrg_handle_map_click(int sx, int sy, bool left)
 {
+  /* The End Turn button (top-right): a global command, checked before any map
+   * click so it never gets swallowed by a map action. */
+  if (left && irrg_endturn_button_hit(sx, sy)) {
+    user_ended_turn();
+    if (getenv("FC_IRR_UBDBG")) { fprintf(stderr, "[irrg] End Turn clicked\n"); fflush(stderr); }
+    return;
+  }
+
   /* Clicking the selected-unit dialog re-centres the 3D view on that unit. */
   if (left && irrg_unit_dialog_hit(sx, sy)) {
     irrg_map3d_refocus_current_unit();
@@ -327,6 +335,7 @@ public:
     switch (m.Event) {
     case irr::EMIE_MOUSE_MOVED:
       irrg_unitbar_mouse_move(m.X, m.Y);   /* hover highlight for the bar */
+      irrg_endturn_mouse_move(m.X, m.Y);   /* hover highlight for End Turn */
       if (g_panning) {
         irrg_pan_step(m.X, m.Y);           /* middle- or left-drag panning */
       } else if (g_left_down && irrg_map3d_is_built()) {
