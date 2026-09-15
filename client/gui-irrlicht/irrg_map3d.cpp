@@ -422,6 +422,18 @@ static scene::IMesh *build_terrain_mesh(int *p_explored, int *p_rendered,
   if (p_sum_y)    *p_sum_y    = sum_y;
   if (rendered == 0) { buf->drop(); mesh->drop(); return 0; }
   mesh->addMeshBuffer(buf);   /* takes ownership of buf */
+  if (std::getenv("FC_IRR_DIAG")) {
+    f32 mnx=1e9f,mxx=-1e9f,mnz=1e9f,mxz=-1e9f;
+    const video::S3DVertex *verts = (const video::S3DVertex *)buf->getVertices();
+    for (int vi=0; vi<buf->getVertexCount(); ++vi) {
+      if (verts[vi].Pos.X<mnx) mnx=verts[vi].Pos.X; if (verts[vi].Pos.X>mxx) mxx=verts[vi].Pos.X;
+      if (verts[vi].Pos.Z<mnz) mnz=verts[vi].Pos.Z; if (verts[vi].Pos.Z>mxz) mxz=verts[vi].Pos.Z;
+    }
+    std::fprintf(stderr,
+      "[irrg] DIAG terrain bbox x[%g..%g] z[%g..%g] (rendered=%d map=%dx%d, expect x[-0.5..%g] z[-0.5..%g])\n",
+      mnx,mxx,mnz,mxz, rendered, mw, mh, mw-0.5, mh-0.5);
+    std::fflush(stderr);
+  }
   return mesh;
 }
 
