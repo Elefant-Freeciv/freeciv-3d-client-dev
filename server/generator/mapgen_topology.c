@@ -167,6 +167,21 @@ void generator_init_topology(bool autosize)
   int sqsize;
   double map_size;
 
+  /* [irrlicht-3d] Force a SQUARE topology for every generated map.
+   * The Irrlicht 3D client (client/gui-irrlicht) is built around a SQUARE
+   * tileset ("Trident") and a square x/y tile grid: its 2D view and its 3D
+   * mesh both place tiles on an integer square lattice and it force-sets its
+   * own topology to square (irrg_force_square_topo). The stock classic ruleset
+   * re-asserts isometric+hexagonal (TF_ISO|TF_HEX) on load (overriding
+   * MAP_DEFAULT_TOPO), so the server would otherwise generate a hex map whose
+   * fog-of-war / vision is computed with HEX adjacency. Drawn on a square
+   * grid that adjacency looks like a narrow strip instead of a circle, and the
+   * client's screen->tile pick is offset (units "move to the wrong tile").
+   * Generating the map with square adjacency fixes both: the visible tiles
+   * form a proper circle around the units and the pick lines up. This affects
+   * all rulesets, which is fine -- this build ships the square-based client. */
+  wld.map.topology_id = 0; /* TF_SQ: no ISO / no HEX bits */
+
   /* The server behavior to create the map is defined by 'map.server.mapsize'.
    * Calculate the xsize/ysize if it is not directly defined. */
   if (autosize) {
