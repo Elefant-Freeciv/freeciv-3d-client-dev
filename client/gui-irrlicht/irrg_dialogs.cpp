@@ -24,6 +24,11 @@
 #include "climap.h"        /* client_tile_get_known() */
 #include "terrain.h"       /* terrain_type_terrain_class(), TC_OCEAN */
 #include "citydlg_common.h"/* city_change_production, get_city_dialog_* */
+#include "irrg_theme.h"    /* Civ4 palette + beveled panel/button/bar helpers */
+#include "game.h"          /* struct civ_game game (game.info.turn / .year) */
+#include "calendar.h"      /* textyear() */
+#include "research.h"      /* research_get() */
+#include "tech.h"          /* advance_by_number, advance_name_translation, A_NONE/UNKNOWN */
 #include <irrlicht.h>   /* irr::E_KEY_CODE for the production-menu key input */
 
 #include <cstdio>
@@ -460,12 +465,8 @@ static void irrg_draw_panel_lines(struct canvas *cv, const char *title,
   const int shown = nlines < 22 ? nlines : 22;
   const int ph = head_h + shown * line_h + 24;
   int px = (cv->width - pw) / 2, py = 110;
-  canvas_put_rectangle(cv, &c_bg,     px, py,            pw, ph);
-  canvas_put_rectangle(cv, &c_border, px, py,            pw, 2);
-  canvas_put_rectangle(cv, &c_border, px, py + ph - 2,   pw, 2);
-  canvas_put_rectangle(cv, &c_border, px, py,            2,  ph);
-  canvas_put_rectangle(cv, &c_border, px + pw - 2, py,   2,  ph);
-  canvas_put_text(cv, px + 14, py + 8, FONT_CITY_NAME, &c_title, title);
+  /* Civ4 beveled dark panel with a gold title header. */
+  irrg_civ_panel(cv, px, py, pw, ph, title);
   /* Close button (top-right): a visible affordance -- any click dismisses the
    * panel (irrg_panel_click), so it can be closed with a mouse alone. */
   {
@@ -563,9 +564,6 @@ static void irrg_draw_unit_dialog(struct canvas *cv)
     std::fflush(stderr);
   }
 
-  static struct color c_udbg  = { 22, 25, 33 };
-  static struct color c_udbrd = { 110, 150, 205 };
-  static struct color c_utt   = { 140, 215, 255 };
   static struct color c_utx   = { 225, 228, 238 };
 
   const struct unit_type *ut = unit_type_get(fu);
@@ -588,24 +586,14 @@ static void irrg_draw_unit_dialog(struct canvas *cv)
     l_extra[0] = '\0';
 
   const int line = 20, pad = 8, W = 272;
-  int title_w = 0, title_h = 0;
-  irrg_get_text_size(&title_w, &title_h, FONT_CITY_NAME, uname);  /* 2x font */
-  title_h += 8;   /* breathing room below the (taller) title glyphs */
+  const int hdr_h = 24;   /* the civ panel header height */
   int datalines = 4 + (l_extra[0] ? 1 : 0);   /* 4 lines + optional extra */
-  int H = pad + title_h + datalines * line + pad;   /* top + title + data + bottom */
+  int H = hdr_h + 6 + datalines * line + 6;   /* header + data + padding */
   int x = 8, y = cv->height - H - 8;
   g_udlg_x = x; g_udlg_y = y; g_udlg_w = W; g_udlg_h = H;   /* for click hit-test */
 
-  canvas_put_rectangle(cv, &c_udbg,  x, y, W, H);
-  canvas_put_rectangle(cv, &c_udbrd, x, y, W, 2);
-  canvas_put_rectangle(cv, &c_udbrd, x, y + H - 2, W, 2);
-  canvas_put_rectangle(cv, &c_udbrd, x, y, 2, H);
-  canvas_put_rectangle(cv, &c_udbrd, x + W - 2, y, 2, H);
-
-  /* title (city-name font, a bit taller), then the data rows below it */
-  int ty = y + pad;
-  canvas_put_text(cv, x + pad, ty, FONT_CITY_NAME, &c_utt, uname);
-  ty += title_h;
+  /* Civ4 beveled panel with the unit type name in the gold header. */
+  int ty = irrg_civ_panel(cv, x, y, W, H, uname) + 2;
   canvas_put_text(cv, x + pad, ty, FONT_REQTREE_TEXT, &c_utx, l_hp);  ty += line;
   canvas_put_text(cv, x + pad, ty, FONT_REQTREE_TEXT, &c_utx, l_mv);  ty += line;
   canvas_put_text(cv, x + pad, ty, FONT_REQTREE_TEXT, &c_utx, l_act); ty += line;
@@ -626,29 +614,16 @@ void irrg_draw_endturn_button(struct canvas *cv)
   if (!cv) return;
   if (client_state() != C_S_RUNNING) return;
   if (irrg_city_dialog_is_open()) return;    /* hidden while a modal is up */
-  static struct color c_etbg     = { 22, 24, 30 };
-  static struct color c_etbdr    = { 125, 135, 160 };
-  static struct color c_ettx     = { 226, 229, 239 };
-  static struct color c_ethover  = { 46, 56, 82 };    /* lighter fill on hover */
-  static struct color c_ethoverb = { 120, 205, 255 }; /* bright border on hover */
   const char *label = "End Turn";
   int tw = 0, th = 0;
   irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, label);
-  g_et_w = tw + 20;
-  g_et_h = th + 12;
+  g_et_w = tw + 24;
+  g_et_h = 30;
   g_et_x = cv->width - g_et_w - 10;
-  g_et_y = 8;
+  g_et_y = 40;   /* just below the Civ4 header bar */
   bool hovered = (g_et_mx >= g_et_x && g_et_mx < g_et_x + g_et_w
                   && g_et_my >= g_et_y && g_et_my < g_et_y + g_et_h);
-  struct color fill = hovered ? c_ethover : c_etbg;
-  struct color bdr  = hovered ? c_ethoverb : c_etbdr;
-  canvas_put_rectangle(cv, &fill, g_et_x, g_et_y, g_et_w, g_et_h);
-  canvas_put_rectangle(cv, &bdr,  g_et_x, g_et_y, g_et_w, 2);
-  canvas_put_rectangle(cv, &bdr,  g_et_x, g_et_y + g_et_h - 2, g_et_w, 2);
-  canvas_put_rectangle(cv, &bdr,  g_et_x, g_et_y, 2, g_et_h);
-  canvas_put_rectangle(cv, &bdr,  g_et_x + g_et_w - 2, g_et_y, 2, g_et_h);
-  canvas_put_text(cv, g_et_x + (g_et_w - tw) / 2, g_et_y + (g_et_h - th) / 2,
-                  FONT_REQTREE_TEXT, &c_ettx, label);
+  irrg_civ_button(cv, g_et_x, g_et_y, g_et_w, g_et_h, label, hovered, false);
 }
 
 bool irrg_endturn_button_hit(int mx, int my)
@@ -680,31 +655,18 @@ void irrg_draw_menu_button(struct canvas *cv)
   if (!cv) return;
   if (client_state() != C_S_RUNNING) return;
   if (irrg_city_dialog_is_open()) return;     /* hidden while a modal is up */
-  static struct color c_mb    = { 22, 24, 30 };
-  static struct color c_mbd   = { 125, 135, 160 };
-  static struct color c_mbt   = { 226, 229, 239 };
-  static struct color c_mbh   = { 46, 56, 82 };      /* lighter fill on hover */
-  static struct color c_mhbrd = { 120, 205, 255 };   /* bright border on hover */
   const char *label = "Menu";
   int tw = 0, th = 0;
   irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, label);
-  g_mb_w = tw + 20;
-  g_mb_h = th + 12;
+  g_mb_w = tw + 22;
+  g_mb_h = 30;
   /* Sit to the LEFT of the End Turn button (drawn just before us in
    * irrg_draw_dialogs). Fall back to the right edge if it isn't available. */
   g_mb_y = g_et_y;
   g_mb_x = (g_et_x > 0) ? (g_et_x - 8 - g_mb_w) : (cv->width - g_mb_w - 10);
   bool hovered = (g_mb_mx >= g_mb_x && g_mb_mx < g_mb_x + g_mb_w
                   && g_mb_my >= g_mb_y && g_mb_my < g_mb_y + g_mb_h);
-  struct color fill = hovered ? c_mbh : c_mb;
-  struct color bdr  = hovered ? c_mhbrd : c_mbd;
-  canvas_put_rectangle(cv, &fill, g_mb_x, g_mb_y, g_mb_w, g_mb_h);
-  canvas_put_rectangle(cv, &bdr,  g_mb_x, g_mb_y, g_mb_w, 2);
-  canvas_put_rectangle(cv, &bdr,  g_mb_x, g_mb_y + g_mb_h - 2, g_mb_w, 2);
-  canvas_put_rectangle(cv, &bdr,  g_mb_x, g_mb_y, 2, g_mb_h);
-  canvas_put_rectangle(cv, &bdr,  g_mb_x + g_mb_w - 2, g_mb_y, 2, g_mb_h);
-  canvas_put_text(cv, g_mb_x + (g_mb_w - tw) / 2, g_mb_y + (g_mb_h - th) / 2,
-                  FONT_REQTREE_TEXT, &c_mbt, label);
+  irrg_civ_button(cv, g_mb_x, g_mb_y, g_mb_w, g_mb_h, label, hovered, false);
 }
 
 bool irrg_menu_button_hit(int mx, int my)
@@ -769,17 +731,18 @@ void irrg_draw_minimap(struct canvas *cv)
   int hw = (vhalf * MM) / mw;
   int hh = (vhalf * MM) / mh;
   static struct color c_vp  = { 255, 255, 255 };
-  static struct color c_bdr = { 210, 210, 210 };
   /* Viewport as a thin OUTLINE (not a filled box) so the map shows through. */
   int vx0 = cx - hw, vy0 = cy - hh, vx1 = cx + hw, vy1 = cy + hh;
   canvas_put_rectangle(cv, &c_vp, vx0, vy0, vx1 - vx0 + 1, 2);       /* top    */
   canvas_put_rectangle(cv, &c_vp, vx0, vy1 - 1, vx1 - vx0 + 1, 2);   /* bottom */
   canvas_put_rectangle(cv, &c_vp, vx0, vy0, 2, vy1 - vy0 + 1);       /* left   */
   canvas_put_rectangle(cv, &c_vp, vx1 - 1, vy0, 2, vy1 - vy0 + 1);   /* right  */
-  canvas_put_rectangle(cv, &c_bdr, g_mm_x, g_mm_y, MM, 1);          /* top    */
-  canvas_put_rectangle(cv, &c_bdr, g_mm_x, g_mm_y + MM - 1, MM, 1); /* bottom */
-  canvas_put_rectangle(cv, &c_bdr, g_mm_x, g_mm_y, 1, MM);          /* left   */
-  canvas_put_rectangle(cv, &c_bdr, g_mm_x + MM - 1, g_mm_y, 1, MM); /* right  */
+  /* Civ4-style gold beveled frame around the minimap + a small "Map" title. */
+  irrg_civ_frame(cv, g_mm_x, g_mm_y, MM, MM);
+  int mw2 = 0, mh2 = 0;
+  irrg_get_text_size(&mw2, &mh2, FONT_REQTREE_TEXT, "Map");
+  canvas_put_text(cv, g_mm_x + (MM - mw2) / 2, g_mm_y - mh2 - 3,
+                  FONT_REQTREE_TEXT, &irrg_civ().text, "Map");
 }
 
 /* Hit-test the minimap box; on a hit set *out_tx/*out_ty to the clicked map
@@ -796,9 +759,60 @@ int irrg_minimap_hit(int x, int y, int *out_tx, int *out_ty)
   return 1;
 }
 
+/* Civ4 top header bar: [ Turn N ]  [ research progress bar ]  [ date ]. A
+ * full-width dark bar with a gold bottom edge. The Menu / End Turn buttons and
+ * the unit/city counter are drawn just below it (see irrg_draw_dialogs). */
+#define IRRG_HEADER_H 34
+static void irrg_draw_header_bar(struct canvas *cv)
+{
+  if (!cv || client_state() != C_S_RUNNING) return;
+  struct irrg_civ_pal P = irrg_civ();
+  const int H = IRRG_HEADER_H;
+  const int W = cv->width;
+  canvas_put_rectangle(cv, &P.bg, 0, 0, W, H);
+  canvas_put_rectangle(cv, &P.bg_dark, 0, H - 2, W, 2);   /* subtle inset shade */
+  canvas_put_rectangle(cv, &P.gold,   0, H - 2, W, 2);    /* gold bottom line   */
+
+  /* Left: turn counter. */
+  char left[48];
+  std::snprintf(left, sizeof(left), "Turn %d", game.info.turn);
+  int lw = 0, lh = 0;
+  irrg_get_text_size(&lw, &lh, FONT_REQTREE_TEXT, left);
+  canvas_put_text(cv, 12, (H - lh) / 2, FONT_REQTREE_TEXT, &P.text, left);
+
+  /* Centre: the research progress bar (green), labelled with the tech being
+   * researched. */
+  const int barW = (W > 900) ? 460 : 360;
+  const int barH = 20;
+  const int barX = (W - barW) / 2;
+  const int barY = (H - barH) / 2;
+  double frac = 0.0;
+  const char *tech = "Research";
+  struct player *me = client_player();
+  if (me) {
+    struct research *res = research_get(me);
+    if (res) {
+      if (res->client.researching_cost > 0)
+        frac = (double)res->bulbs_researched / res->client.researching_cost;
+      if (res->researching != A_NONE && res->researching != A_UNKNOWN) {
+        struct advance *adv = advance_by_number(res->researching);
+        if (adv) tech = advance_name_translation(adv);
+      }
+    }
+  }
+  irrg_civ_bar(cv, barX, barY, barW, barH, frac, &P.green, tech);
+
+  /* Right: the in-game date. */
+  const char *date = textyear(game.info.year);
+  int dw = 0, dh = 0;
+  irrg_get_text_size(&dw, &dh, FONT_REQTREE_TEXT, date);
+  canvas_put_text(cv, W - dw - 14, (H - dh) / 2, FONT_REQTREE_TEXT, &P.text, date);
+}
+
 void irrg_draw_dialogs(struct canvas *cv)
 {
   if (!cv) return;
+  irrg_draw_header_bar(cv);       /* Civ4 top bar (turn / research / date) */
   irrg_draw_city_dialog(cv);
   irrg_draw_minimap(cv);
   /* The persistent bottom-left message window moved to the "Messages" submenu
@@ -815,8 +829,8 @@ void irrg_draw_dialogs(struct canvas *cv)
     const char *s = "Menu + End Turn: top-right   |   click unit: select, click tile: move   |   drag: pan, wheel: zoom";
     int tw = 0, th = 0;
     irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, s);
-    canvas_put_rectangle(cv, &c_hintbg, 5, 6, tw + 6, th + 4);
-    canvas_put_text(cv, 8, 8, FONT_REQTREE_TEXT, &c_hinttx, s);
+    canvas_put_rectangle(cv, &c_hintbg, 5, 40, tw + 6, th + 4);
+    canvas_put_text(cv, 8, 42, FONT_REQTREE_TEXT, &c_hinttx, s);
 
     /* Persistent unit/city counter: always shows how many you have, so an
      * empty-looking (fog-covered) map can't be mistaken for 'no units/cities'.
@@ -833,8 +847,8 @@ void irrg_draw_dialogs(struct canvas *cv)
       std::snprintf(line2, sizeof(line2), "Units: %d   Cities: %d", nu, nc);
     int tw2 = 0, th2 = 0;
     irrg_get_text_size(&tw2, &th2, FONT_REQTREE_TEXT, line2);
-    canvas_put_rectangle(cv, &c_hintbg, 5, 6 + th + 6, tw2 + 6, th2 + 4);
-    canvas_put_text(cv, 8, 6 + th + 8, FONT_REQTREE_TEXT, &c_hinthy, line2);
+    canvas_put_rectangle(cv, &c_hintbg, 5, 40 + th + 6, tw2 + 6, th2 + 4);
+    canvas_put_text(cv, 8, 40 + th + 8, FONT_REQTREE_TEXT, &c_hinthy, line2);
   }
 
   /* End Turn + Menu buttons (top-right) -- always available in-game; the Menu

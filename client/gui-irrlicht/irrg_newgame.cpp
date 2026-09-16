@@ -2,6 +2,7 @@
 #include "irrg_newgame.h"
 #include "irrg_cxxside.h"  /* irrg_canvas_put_text/rectangle, irrg_get_text_size */
 #include "graphics.h"      /* struct color {r,g,b}, struct canvas (concrete defs) */
+#include "irrg_theme.h"    /* Civ4 palette + beveled panel/button helpers */
 #include "canvas_g.h"      /* client_font */
 #include "client_main.h"   /* client_state() etc. */
 #include "chatline_common.h" /* send_chat() -- send the /set + /start commands */
@@ -41,16 +42,7 @@ static int   g_diff    = 1;       /* Normal */
 static bool  g_start   = false;
 static bool  g_cancel  = false;
 
-static struct color c_bg     = { 18, 20, 28 };
-static struct color c_title  = { 120, 200, 255 };
-static struct color c_row    = { 40, 46, 62 };
-static struct color c_rowsel = { 70, 122, 195 };
-static struct color c_start  = { 40, 110, 50 };
-static struct color c_startsel = { 60, 160, 75 };
-static struct color c_cancel = { 60, 40, 40 };
-static struct color c_tx     = { 235, 235, 235 };
-static struct color c_val    = { 130, 225, 130 };
-static struct color c_hint   = { 130, 132, 145 };
+/* (All colours now come from the shared Civ4 palette -- irrg_theme.h / irrg_civ().) */
 
 static void row_rect(int i, int *x, int *y, int *w, int *h)
 {
@@ -163,50 +155,42 @@ void irrg_newgame_draw(struct canvas *cv, int win_w, int win_h)
   if (!cv) return;
   g_W = win_w > 0 ? win_w : g_W;
   g_H = win_h > 0 ? win_h : g_H;
+  struct irrg_civ_pal P = irrg_civ();
 
-  irrg_canvas_put_rectangle(cv, &c_bg, 0, 0, g_W, g_H);
+  /* Dark background. */
+  irrg_canvas_put_rectangle(cv, &P.bg_dark, 0, 0, g_W, g_H);
 
+  /* The Civ4 panel: a gold "Start a New Game" header + option rows + buttons. */
+  const int pw = 600, ph = 470;
+  const int px = g_W / 2 - pw / 2;
+  const int py = g_H / 2 - ph / 2;
+  irrg_civ_panel(cv, px, py, pw, ph, "Start a New Game");
   {
+    const char *sub = "Configure the map, then start.    (requires server command access)";
     int tw = 0, th = 0;
-    irrg_get_text_size(&tw, &th, FONT_CITY_NAME, "Start a New Game");
-    irrg_canvas_put_text(cv, g_W / 2 - tw / 2, g_H / 4 - 24,
-                         FONT_CITY_NAME, &c_title, "Start a New Game");
-  }
-  {
-    int tw = 0, th = 0;
-    irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT,
-                       "Configure the map, then start. (requires server command access)");
-    irrg_canvas_put_text(cv, g_W / 2 - tw / 2, g_H / 4 + 4,
-                         FONT_REQTREE_TEXT, &c_hint,
-                       "Configure the map, then start. (requires server command access)");
+    irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, sub);
+    irrg_canvas_put_text(cv, px + (pw - tw) / 2, py + 30, FONT_REQTREE_TEXT,
+                         &P.text_dim, sub);
   }
 
   const char *field[ROW_COUNT] = { "Map size", "World wrap", "AI opponents",
-                                   "AI difficulty", "Start Game", "Cancel" };
+                                   "AI difficulty", "Start Game",
+                                   (client_state() == C_S_PREPARING) ? "Disconnect" : "Cancel" };
   for (int i = 0; i < ROW_COUNT; i++) {
     int rx, ry, rw, rh;
     row_rect(i, &rx, &ry, &rw, &rh);
-
-    struct color *fill;
-    if (i == ROW_START)       fill = (g_sel == i) ? &c_startsel : &c_start;
-    else if (i == ROW_CANCEL) fill = (g_sel == i) ? &c_rowsel : &c_cancel;
-    else                      fill = (g_sel == i) ? &c_rowsel : &c_row;
-    irrg_canvas_put_rectangle(cv, fill, rx, ry, rw, rh);
-
-    int tw = 0, th = 0;
-    irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, field[i]);
-    if (i <= ROW_DIFF)
-      irrg_canvas_put_text(cv, rx + 16, ry + (rh - th) / 2,
-                           FONT_REQTREE_TEXT, &c_tx, field[i]);
-    else
-      irrg_canvas_put_text(cv, rx + rw / 2 - tw / 2, ry + (rh - th) / 2,
-                           FONT_REQTREE_TEXT, &c_tx, field[i]);
-    if (g_sel == i)
-      irrg_canvas_put_text(cv, rx + 4, ry + (rh - th) / 2,
-                           FONT_REQTREE_TEXT, &c_tx, ">");
-
-    /* option value (right side) */
+    bool sel = (g_sel == i);
     if (i <= ROW_DIFF) {
+      /* Option row: beveled dark; gold-framed + left accent when selected. */
+      struct color fill = sel ? P.btn_hi : P.bg;
+      irrg_canvas_put_rectangle(cv, &fill, rx, ry, rw, rh);
+      irrg_civ_frame(cv, rx, ry, rw, rh);
+      if (sel)
+        irrg_canvas_put_rectangle(cv, &P.gold, rx + 1, ry + 1, 3, rh - 2);
+      int tw = 0, th = 0;
+      irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, field[i]);
+      irrg_canvas_put_text(cv, rx + 18, ry + (rh - th) / 2, FONT_REQTREE_TEXT,
+                           &P.text, field[i]);
       char v[40];
       if (i == ROW_MAPSIZE) std::snprintf(v, sizeof(v), "%s", MS_LABEL[g_mapsize]);
       else if (i == ROW_WRAP) std::snprintf(v, sizeof(v), "%s", WRAP_LABEL[g_wrap]);
@@ -214,17 +198,28 @@ void irrg_newgame_draw(struct canvas *cv, int win_w, int win_h)
       else std::snprintf(v, sizeof(v), "%s", DIFF_LABEL[g_diff]);
       int vw = 0, vh = 0;
       irrg_get_text_size(&vw, &vh, FONT_REQTREE_TEXT, v);
-      irrg_canvas_put_text(cv, rx + rw - 16 - vw, ry + (rh - vh) / 2,
-                           FONT_REQTREE_TEXT, &c_val, v);
+      irrg_canvas_put_text(cv, rx + rw - 18 - vw, ry + (rh - vh) / 2,
+                           FONT_REQTREE_TEXT, &P.green, v);
+    } else if (i == ROW_START) {
+      /* Green "Start Game" button (the primary action). */
+      struct color fill = sel ? P.green : P.green_lo;
+      irrg_canvas_put_rectangle(cv, &fill, rx, ry, rw, rh);
+      irrg_civ_frame(cv, rx, ry, rw, rh);
+      int tw = 0, th = 0;
+      irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, "Start Game");
+      irrg_canvas_put_text(cv, rx + rw / 2 - tw / 2, ry + rh / 2 - th / 2,
+                           FONT_REQTREE_TEXT, &P.hdr_tx, "Start Game");
+    } else {
+      irrg_civ_button(cv, rx, ry, rw, rh, field[i], sel, false);
     }
   }
 
+  /* Bottom hint. */
   {
+    const char *hint = "click a row / value   (or the arrow keys)   click Start Game to begin";
     int tw = 0, th = 0;
-    irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT,
-                       "click a row / value    (or arrows)    click Start Game");
-    irrg_canvas_put_text(cv, g_W / 2 - tw / 2, g_H - 44,
-                         FONT_REQTREE_TEXT, &c_hint,
-                       "click a row / value    (or arrows)    click Start Game");
+    irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, hint);
+    irrg_canvas_put_text(cv, g_W / 2 - tw / 2, py + ph - 26, FONT_REQTREE_TEXT,
+                         &P.text_dim, hint);
   }
 }

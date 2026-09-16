@@ -204,10 +204,10 @@ int irrg_ui_main(int argc, char *argv[])
    * game; FC_IRR_AUTOSTART=0 disables it (then start from the on-screen menu
    * or press Enter). */
   const char *aenv = std::getenv("FC_IRR_AUTOSTART");
-  const bool auto_start = (aenv == 0) || (aenv[0] != '0');
+  const bool auto_start = (aenv != 0) && (aenv[0] != '0');
   irrg_log(auto_start
-    ? "auto-start: a new game starts automatically when the server has none running (FC_IRR_AUTOSTART=0 to disable)."
-    : "auto-start disabled (FC_IRR_AUTOSTART=0); use the on-screen menu / Enter to start a game.");
+    ? "auto-start ENABLED (FC_IRR_AUTOSTART=1): a new game starts automatically when the server has none running."
+    : "auto-start OFF (default): when connected but no game is running, the Start Game menu is shown. Set FC_IRR_AUTOSTART=1 to auto-start.");
   /* FC_IRR_AUTOTURN=1: automatically end the player's turn every ~60 frames
    * (headless play-through). OFF by default so a real player is never cut off
    * mid-turn -- in interactive play the turn is ended only via the in-game
@@ -293,8 +293,15 @@ int irrg_ui_main(int argc, char *argv[])
       const bool in_prep = (client_state() == C_S_PREPARING) && (net_socket >= 0);
       if (in_prep) {
         ++prep_wait;
-        if (auto_start && prep_wait >= 120 && ((prep_wait - 120) % 90) == 0)
-          send_chat("/start");
+        if (auto_start) {
+          /* Auto-start: send /start ~2 s in, resending until the game begins. */
+          if (prep_wait >= 120 && ((prep_wait - 120) % 90) == 0)
+            send_chat("/start");
+        } else {
+          /* Default: show the Start Game menu (the new-game options) so the
+           * player picks the settings + starts a game (or disconnects). */
+          if (!g_newgame_open) irrg_open_newgame();
+        }
       } else {
         prep_wait = 0;
       }
@@ -635,7 +642,15 @@ int irrg_ui_main(int argc, char *argv[])
      *      each frame. "Start Game" sends the configured server options and /start. */
     if (irrg_settings_take_close()) g_settings_open = false;
     if (irrg_gamemenu_take_close()) g_gamemenu_open = false;
-    if (irrg_newgame_take_cancel()) g_newgame_open  = false;
+    if (irrg_newgame_take_cancel()) {
+      g_newgame_open = false;
+      /* As the Start Game menu (no game running), "Disconnect" closes the
+       * connection (back to the main menu); in-game it just closes the menu. */
+      if (client_state() == C_S_PREPARING) {
+        irrg_log("start-game menu: disconnect requested");
+        connection_close(&client.conn, "Start Game menu: disconnect");
+      }
+    }
     if (irrg_newgame_take_start()) {
       g_newgame_open = false;
       irrg_log("new game: sending options + /start");

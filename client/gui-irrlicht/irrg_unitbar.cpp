@@ -22,6 +22,7 @@ extern "C" {
 #include "canvas_g.h"      /* canvas_put_text, canvas_put_rectangle, client_font */
 }
 #include "irrg_cxxside.h"  /* irrg_get_text_size (C++ linkage) */
+#include "irrg_theme.h"    /* Civ4 palette + beveled frame/button helpers */
 #include "client_main.h"   /* client_state, C_S_RUNNING */
 #include "unitlist.h"
 #include "unit.h"          /* ORDER_LAST, unit fields, unit_can_do_action, unit_tile */
@@ -193,67 +194,48 @@ void irrg_unitbar_draw(struct canvas *cv)
   unitbar_build(fu);
   unitbar_layout(cv->width, cv->height);
 
-  static struct color c_bg        = { 22, 24, 30 };
-  static struct color c_bdr       = { 125, 135, 160 };
-  static struct color c_tx        = { 226, 229, 239 };
-  static struct color c_hbg       = { 30, 33, 42 };
-  static struct color c_hy        = { 120, 215, 130 };
-  static struct color c_hover     = { 46, 56, 82 };    /* lighter fill on hover  */
-  static struct color c_hover_bdr = { 120, 205, 255 }; /* bright border on hover */
-  static struct color c_pressed   = { 76, 118, 172 };  /* blue fill when pressed */
-  static struct color c_press_bdr = { 195, 235, 255 }; /* bright border pressed  */
-
-  /* Header strip above the buttons: which unit the bar controls (type name). */
+  /* Header: which unit the bar controls (type name + id). */
   char hdr[96];
   std::snprintf(hdr, sizeof(hdr), "%s (unit %d) actions:",
                 utype_name_translation(unit_type_get(fu)), fu->id);
   int hw = 0, hh = 0;
   irrg_get_text_size(&hw, &hh, FONT_REQTREE_TEXT, hdr);
 
-  if (g_nshown <= 0) {
-    /* No available actions (unit has no moves + nothing else to do). */
-    int box_w = hw + 12;
-    int box_x = (cv->width - box_w) / 2;
-    canvas_put_rectangle(cv, &c_hbg, box_x, g_btn_y - hh - 6, box_w, hh + 4);
-    canvas_put_text(cv, box_x + (box_w - hw) / 2, g_btn_y - hh - 4,
-                    FONT_REQTREE_TEXT, &c_hy, hdr);
-    canvas_put_text(cv, box_x, g_btn_y - 2, FONT_REQTREE_TEXT, &c_tx,
-                    "(no available actions -- unit has no moves)");
-    return;
-  }
-
   int total = 0;
   for (int i = 0; i < g_nshown; ++i) total += g_btn_w[i];
   total += 8 * (g_nshown - 1);
   int box_w = (hw > total) ? hw : total;
-  box_w += 12;
+  box_w += 16;
   int box_x = (cv->width - box_w) / 2;
-  canvas_put_rectangle(cv, &c_hbg, box_x, g_btn_y - hh - 6, box_w, hh + 4);
-  canvas_put_text(cv, box_x + (box_w - hw) / 2, g_btn_y - hh - 4,
-                  FONT_REQTREE_TEXT, &c_hy, hdr);
+  const int hdr_h = hh + 8;                  /* header strip height           */
+  const int gap   = 6;
+  const int box_y = g_btn_y - hdr_h - gap;   /* top of the palette            */
+  const int box_h = hdr_h + gap + g_btn_h + 6;
+  struct irrg_civ_pal P = irrg_civ();
 
-  /* Buttons, with hover + press feedback. */
+  /* The Civ4 command palette: a beveled dark bar, a header naming the unit,
+   * then the action buttons. */
+  canvas_put_rectangle(cv, &P.bg, box_x, box_y, box_w, box_h);
+  irrg_civ_frame(cv, box_x, box_y, box_w, box_h);
+  canvas_put_rectangle(cv, &P.bg_dark, box_x + 2, box_y + 2, box_w - 4, hdr_h);
+  canvas_put_text(cv, box_x + (box_w - hw) / 2, box_y + (hdr_h - hh) / 2,
+                  FONT_REQTREE_TEXT, &P.gold_hi, hdr);
+
+  if (g_nshown <= 0) {
+    static struct color c_tx = { 226, 229, 239 };
+    canvas_put_text(cv, box_x + 8, g_btn_y + 4, FONT_REQTREE_TEXT, &c_tx,
+                    "(no available actions -- unit has no moves)");
+    return;
+  }
+
+  /* Buttons, with hover + press feedback (Civ4 beveled buttons). */
   for (int i = 0; i < g_nshown; ++i) {
     int bx = g_btn_x[i], bw = g_btn_w[i];
     bool hovered = (g_mouse_x >= bx && g_mouse_x < bx + bw
                     && g_mouse_y >= g_btn_y && g_mouse_y < g_btn_y + g_btn_h);
     bool pressed = (g_pressed == i);
-    struct color fill, bdr;
-    if (pressed)      { fill = c_pressed;  bdr = c_press_bdr; }
-    else if (hovered) { fill = c_hover;    bdr = c_hover_bdr; }
-    else              { fill = c_bg;       bdr = c_bdr; }
-    int yoff = pressed ? 2 : 0;        /* sink a pressed button a couple of px */
-    int by = g_btn_y + yoff;
-    int bh = g_btn_h - yoff;
-    canvas_put_rectangle(cv, &fill, bx, by, bw, bh);
-    canvas_put_rectangle(cv, &bdr,  bx, by, bw, 2);
-    canvas_put_rectangle(cv, &bdr,  bx, by + bh - 2, bw, 2);
-    canvas_put_rectangle(cv, &bdr,  bx, by, 2, bh);
-    canvas_put_rectangle(cv, &bdr,  bx + bw - 2, by, 2, bh);
-    int tw = 0, th = 0;
-    irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, g_label[i]);
-    canvas_put_text(cv, bx + (bw - tw) / 2, by + (bh - th) / 2,
-                    FONT_REQTREE_TEXT, &c_tx, g_label[i]);
+    irrg_civ_button(cv, bx, g_btn_y, bw, g_btn_h, g_label[i],
+                    hovered || pressed, false);
   }
 }
 

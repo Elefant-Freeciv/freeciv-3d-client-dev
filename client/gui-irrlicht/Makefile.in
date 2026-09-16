@@ -159,7 +159,7 @@ libgui_irrlicht_la_DEPENDENCIES = $(am__DEPENDENCIES_1)
 am_libgui_irrlicht_la_OBJECTS = gui_main.lo irrg_cxxside.lo \
 	irrg_graphics.lo irrg_map3d.lo irrg_interact.lo \
 	irrg_dialogs.lo irrg_unitbar.lo irrg_menu.lo irrg_settings.lo \
-	irrg_newgame.lo irrg_gamemenu.lo irrg_stubs.lo \
+	irrg_newgame.lo irrg_gamemenu.lo irrg_theme.lo irrg_stubs.lo \
 	irrg_common_stubs.lo
 libgui_irrlicht_la_OBJECTS = $(am_libgui_irrlicht_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -187,7 +187,8 @@ am__depfiles_remade = ./$(DEPDIR)/gui_main.Plo \
 	./$(DEPDIR)/irrg_graphics.Plo ./$(DEPDIR)/irrg_interact.Plo \
 	./$(DEPDIR)/irrg_map3d.Plo ./$(DEPDIR)/irrg_menu.Plo \
 	./$(DEPDIR)/irrg_newgame.Plo ./$(DEPDIR)/irrg_settings.Plo \
-	./$(DEPDIR)/irrg_stubs.Plo ./$(DEPDIR)/irrg_unitbar.Plo
+	./$(DEPDIR)/irrg_stubs.Plo ./$(DEPDIR)/irrg_theme.Plo \
+	./$(DEPDIR)/irrg_unitbar.Plo
 am__mv = mv -f
 CXXCOMPILE = $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS)
@@ -672,6 +673,8 @@ libgui_irrlicht_la_SOURCES = \
 	irrg_newgame.h \
 	irrg_gamemenu.cpp \
 	irrg_gamemenu.h \
+	irrg_theme.cpp \
+	irrg_theme.h \
 	irrg_stubs.cpp \
 	irrg_common_stubs.cpp
 
@@ -741,6 +744,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/irrg_newgame.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/irrg_settings.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/irrg_stubs.Plo@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/irrg_theme.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/irrg_unitbar.Plo@am__quote@ # am--include-marker
 
 $(am__depfiles_remade):
@@ -915,6 +919,7 @@ distclean: distclean-am
 	-rm -f ./$(DEPDIR)/irrg_newgame.Plo
 	-rm -f ./$(DEPDIR)/irrg_settings.Plo
 	-rm -f ./$(DEPDIR)/irrg_stubs.Plo
+	-rm -f ./$(DEPDIR)/irrg_theme.Plo
 	-rm -f ./$(DEPDIR)/irrg_unitbar.Plo
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
@@ -973,6 +978,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -f ./$(DEPDIR)/irrg_newgame.Plo
 	-rm -f ./$(DEPDIR)/irrg_settings.Plo
 	-rm -f ./$(DEPDIR)/irrg_stubs.Plo
+	-rm -f ./$(DEPDIR)/irrg_theme.Plo
 	-rm -f ./$(DEPDIR)/irrg_unitbar.Plo
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
