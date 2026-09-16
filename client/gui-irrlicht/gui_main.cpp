@@ -199,8 +199,15 @@ int irrg_ui_main(int argc, char *argv[])
   set_client_state(C_S_DISCONNECTED);
 
   irrg_log("ui_main: entering event loop.");
-  const bool auto_start = (std::getenv("FC_IRR_AUTOSTART") != 0);
-  if (auto_start) irrg_log("auto-start enabled (FC_IRR_AUTOSTART).");
+  /* Detect "connected but no running game" (C_S_PREPARING) and start a new
+   * game automatically. DEFAULT ON so "just run the client" gets you into a
+   * game; FC_IRR_AUTOSTART=0 disables it (then start from the on-screen menu
+   * or press Enter). */
+  const char *aenv = std::getenv("FC_IRR_AUTOSTART");
+  const bool auto_start = (aenv == 0) || (aenv[0] != '0');
+  irrg_log(auto_start
+    ? "auto-start: a new game starts automatically when the server has none running (FC_IRR_AUTOSTART=0 to disable)."
+    : "auto-start disabled (FC_IRR_AUTOSTART=0); use the on-screen menu / Enter to start a game.");
   /* FC_IRR_AUTOTURN=1: automatically end the player's turn every ~60 frames
    * (headless play-through). OFF by default so a real player is never cut off
    * mid-turn -- in interactive play the turn is ended only via the in-game
@@ -275,13 +282,22 @@ int irrg_ui_main(int argc, char *argv[])
       user_ended_turn();
     }
 
-    /* 0c. Auto-start (FC_IRR_AUTOSTART=1): the server only begins the game
-     * once every connected player is ready, so send "/start" (marks us ready)
-     * while in PREPARING. No-op once RUNNING. Lets a headless client reach
-     * C_S_RUNNING so the real map view renders. */
-    if (auto_start && client_state() == C_S_PREPARING
-        && net_socket >= 0 && (frames % 60) == 0) {
-      send_chat("/start");
+    /* 0c. Detect "connected but no running game" (C_S_PREPARING) and start a
+     * new game automatically (DEFAULT ON; FC_IRR_AUTOSTART=0 disables). The
+     * server only begins the game once every connected player is ready, so we
+     * send "/start" (marks us ready). Wait ~2 s after entering PREPARING so
+     * the on-screen menu (Start a New Game / Disconnect) is seen, then send
+     * /start and resend every ~1.5 s until the game actually begins. */
+    {
+      static int prep_wait = 0;
+      const bool in_prep = (client_state() == C_S_PREPARING) && (net_socket >= 0);
+      if (in_prep) {
+        ++prep_wait;
+        if (auto_start && prep_wait >= 120 && ((prep_wait - 120) % 90) == 0)
+          send_chat("/start");
+      } else {
+        prep_wait = 0;
+      }
     }
 
     /* 0d. Map-view init: a headless client has no window-resize event to
@@ -793,6 +809,9 @@ int irrg_ui_main(int argc, char *argv[])
         putline(l_conn, FONT_REQTREE_TEXT, &pc_body);
         putline("Status: connected, but no game is running yet (no map to show).",
                 FONT_REQTREE_TEXT, &pc_dim);
+        if (auto_start)
+          putline("A new game will start automatically in a moment -- Disconnect to cancel.",
+                  FONT_REQTREE_TEXT, &pc_dim);
         /* Two clickable buttons (mouse-friendly equivalents of ENTER/ESC) so a
          * mouse-only user can start a game or disconnect. Their rects are stored
          * in g_prep_* for irrg_prep_button_hit (called from irrg_interact.cpp). */
