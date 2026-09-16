@@ -721,77 +721,44 @@ int irrg_ui_main(int argc, char *argv[])
       g_vdriver->endScene();
     } else if (map3d && wld.map.xsize > 0 && wld.map.ysize > 0
                && !irrg_map3d_is_built() && g_vdriver) {
-      /* 3a3. LOADING MAP: a game is being set up -- the map is arriving from
-       * the server and/or the 3D terrain isn't built yet. Show a progress bar
-       * so a slow download / large map doesn't look frozen. Progress = the
-       * fraction of map tiles whose terrain has been received. */
-      core::dimension2d<u32> ls = g_vdriver->getScreenSize();
-      static struct canvas *lcv = nullptr;
-      if (!lcv || lcv->width != ls.Width || lcv->height != ls.Height) {
-        if (lcv) irrg_canvas_free(lcv);
-        lcv = irrg_canvas_create((int)ls.Width, (int)ls.Height);
-      }
-      if (lcv) {
-        static struct color l_bg    = { 14, 15, 20 };
-        static struct color l_title = { 245, 245, 250 };
-        static struct color l_body  = { 200, 205, 215 };
-        static struct color l_barb  = { 40, 44, 54 };
-        static struct color l_barf  = { 90, 200, 120 };
-        static struct color l_bdr   = { 120, 130, 150 };
-        static int l_frame = 0, l_done = 0, l_total = 1, l_tick = 0;
-        int W = lcv->width, H = lcv->height;
-        if ((++l_tick % 10) == 0 || l_total != (int)(wld.map.xsize * wld.map.ysize)) {
-          l_total = (int)(wld.map.xsize * wld.map.ysize);
-          l_done = 0;
-          for (int yy = 0; yy < (int)wld.map.ysize; ++yy)
-            for (int xx = 0; xx < (int)wld.map.xsize; ++xx) {
-              struct tile *t = map_pos_to_tile(&wld.map, xx, yy);
-              if (t && tile_terrain(t)) ++l_done;
-            }
+      /* 3a3. The 3D terrain isn't built yet (the map is still arriving from the
+       * server and/or the build is pending). Show the LIVE 2D map (always
+       * available from mapview.store) with a small "Building 3D terrain" status
+       * line -- the previous working mechanism. There is deliberately NO
+       * progress bar: a bar sits at a fixed % whenever the build is slow or a
+       * terrain mesh can't be produced (slow download, missing art), which
+       * looks exactly like a hang. The per-frame build retry (step 0d2) flips
+       * us to the 3D view the moment the terrain is present and the mesh
+       * builds; if it can't, the player still has a usable 2D map. */
+      core::dimension2d<u32> ssz = g_vdriver->getScreenSize();
+      int W = (int)ssz.Width, H = (int)ssz.Height;
+      g_vdriver->beginScene(true, true, video::SColor(255, 30, 30, 30));
+      struct canvas *mc = mapview.store ? mapview.store : irrg_get_map_canvas();
+      if (mc && g_map_zoom_present > 1.0001f)
+        irrg_canvas_present_zoomed(mc, g_map_zoom_present, W, H);
+      else if (mc)
+        irrg_canvas_present(mc);
+      /* Small top banner: a plain status line, not a progress indicator. */
+      {
+        static struct canvas *bcv = nullptr;
+        if (!bcv || bcv->width != W || bcv->height != H) {
+          if (bcv) irrg_canvas_free(bcv);
+          bcv = irrg_canvas_create(W, H);
         }
-        float prog = (float)l_done / (float)std::max(1, l_total);
-        /* Blend in a time-based floor so the bar always advances (for a fog
-         * player the tile fraction is the small explored area and would
-         * otherwise look stuck). Reaches ~90% after ~1.5s of loading. */
-        /* Gentle time-based floor: nudge the bar a little early (a fog player
-         * has only a small explored area, so the tile fraction alone sits low).
-         * Capped LOW (20%) -- NOT 90% -- so a slow download reads as "still
-         * early", never as "stuck at 90%". The real tile fraction overtakes it
-         * for full-map (observer) downloads. */
-        float tfrac = (float)l_frame / 180.0f; if (tfrac > 0.2f) tfrac = 0.2f;
-        if (tfrac > prog) prog = tfrac;
-        irrg_canvas_put_rectangle(lcv, &l_bg, 0, 0, W, H);
-        const char *t1 = "Loading map";
-        int tw = 0, th = 0;
-        irrg_get_text_size(&tw, &th, FONT_CITY_NAME, t1);
-        irrg_canvas_put_text(lcv, W / 2 - tw / 2, H / 2 - 130, FONT_CITY_NAME, &l_title, t1);
-        const char *t2 = "Receiving map data from the server and building the 3D terrain.";
-        irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, t2);
-        irrg_canvas_put_text(lcv, W / 2 - tw / 2, H / 2 - 92, FONT_REQTREE_TEXT, &l_body, t2);
-        int bw = 540, bh = 26, bx = W / 2 - bw / 2, by = H / 2 - 24;
-        irrg_canvas_put_rectangle(lcv, &l_barb, bx, by, bw, bh);
-        int fw = (int)(prog * (bw - 4));
-        if (fw < 0) fw = 0; if (fw > bw - 4) fw = bw - 4;
-        if (fw > 0) irrg_canvas_put_rectangle(lcv, &l_barf, bx + 2, by + 2, fw, bh - 4);
-        irrg_canvas_put_rectangle(lcv, &l_bdr, bx, by, bw, 2);
-        irrg_canvas_put_rectangle(lcv, &l_bdr, bx, by + bh - 2, bw, 2);
-        irrg_canvas_put_rectangle(lcv, &l_bdr, bx, by, 2, bh);
-        irrg_canvas_put_rectangle(lcv, &l_bdr, bx + bw - 2, by, 2, bh);
-        char pctp[40];
-        std::snprintf(pctp, sizeof pctp, "%d%%   (%d of %d tiles received)",
-                      (int)(prog * 100.0f), l_done, l_total);
-        irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, pctp);
-        irrg_canvas_put_text(lcv, W / 2 - tw / 2, by + bh + 14, FONT_REQTREE_TEXT, &l_body, pctp);
-        int d = (l_frame / 15) % 4;
-        const char *ds = d == 0 ? "." : d == 1 ? ".." : d == 2 ? "..." : "....";
-        char hint[48]; std::snprintf(hint, sizeof hint, "Please wait%s", ds);
-        irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, hint);
-        irrg_canvas_put_text(lcv, W / 2 - tw / 2, by + bh + 44, FONT_REQTREE_TEXT, &l_body, hint);
-        ++l_frame;
-        g_vdriver->beginScene(true, true, video::SColor(255, 14, 15, 20));
-        irrg_canvas_present(lcv);
-        g_vdriver->endScene();
+        if (bcv) {
+          std::memset(bcv->pixels, 0, (size_t)W * H * 4);   /* transparent */
+          static struct color bb_bg = { 24, 26, 34 };
+          static struct color bb_tx = { 210, 224, 244 };
+          irrg_canvas_put_rectangle(bcv, &bb_bg, 0, 0, W, 34);
+          const char *bt = "Building 3D terrain ... (2D map shown until ready)";
+          int tw = 0, th = 0;
+          irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, bt);
+          irrg_canvas_put_text(bcv, W / 2 - tw / 2, (34 - th) / 2,
+                               FONT_REQTREE_TEXT, &bb_tx, bt);
+          irrg_canvas_present(bcv);
+        }
       }
+      g_vdriver->endScene();
     } else if (client_state() == C_S_PREPARING && g_vdriver) {
       /* 3a. PREPARING: connected but NO GAME running -> no map (mapview.store
        * null). Show a status screen; ENTER opens the new-game options screen,

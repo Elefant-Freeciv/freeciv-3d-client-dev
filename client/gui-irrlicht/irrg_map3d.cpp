@@ -740,9 +740,14 @@ int irrg_map3d_build(void)
                                           &missing, &oriented, &orient_bits,
                                           &sum_x, &sum_y);
   if (!mesh) {
-    std::fprintf(stderr,
-      "[irrg] map3d: no tiles rendered (fog=%d missing=%d map=%dx%d)\n",
-      fogged, missing, mw, mh);
+    /* Throttled: the per-frame build retry calls this repeatedly while the
+     * terrain is still downloading, so only log the first failure + ~every
+     * 60th. Includes the art root so a wrong/missing FC_IRR_ART is obvious. */
+    static unsigned s_nofail = 0;
+    if ((s_nofail++ % 60) == 0)
+      std::fprintf(stderr,
+        "[irrg] map3d: no tiles rendered yet (fog=%d missing=%d map=%dx%d art=%s)\n",
+        fogged, missing, mw, mh, art_root.c_str());
     return 0;
   }
   last_explored = explored;
