@@ -31,4 +31,9 @@ void irrg_open_settings(void);   /* in-game graphics settings ('G') */
 void irrg_open_newgame(void);    /* new-game options (from the preparing screen) */
 void irrg_open_gamemenu(void);   /* in-game menu ('ESC' with no dialog open) */
 
+/* PREPARING screen (connected, no game yet): the two on-screen buttons let a
+ * mouse-only user start a game / disconnect (the ENTER/ESC equivalents).
+ * Returns 0 = "Start a New Game", 1 = "Disconnect", -1 = no button hit. */
+int irrg_prep_button_hit(int x, int y);
+
 #endif /* GUI_IRRLICHT_GUI_MAIN_H */

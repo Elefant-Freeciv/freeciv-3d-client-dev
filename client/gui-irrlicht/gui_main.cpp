@@ -80,6 +80,10 @@ static bool  g_settings_open  = false;  /* graphics settings modal is up */
 static bool  g_newgame_open   = false;  /* new-game options modal is up */
 static bool  g_gamemenu_open  = false;  /* in-game menu modal is up */
 static bool  irrg_gamemenu_dump = false; /* one-shot: dump the menu canvas (test) */
+/* PREPARING-screen button rects (filled each frame in the render branch); used
+ * by irrg_prep_button_hit so a mouse click can start a game / disconnect. */
+static int g_prep_start_x=0, g_prep_start_y=0, g_prep_start_w=0, g_prep_start_h=0;
+static int g_prep_disc_x =0, g_prep_disc_y =0, g_prep_disc_w =0, g_prep_disc_h =0;
 
 double irrg_get_map_zoom_present(void) { return (double)g_map_zoom_present; }
 void irrg_set_map_zoom_present(double z)
@@ -106,6 +110,17 @@ void irrg_set_use3d(bool on)
 void irrg_open_settings(void) { g_settings_open = true; }
 void irrg_open_newgame(void)  { g_newgame_open  = true; }
 void irrg_open_gamemenu(void) { g_gamemenu_open = true; }
+
+/* Hit-test the two PREPARING-screen buttons (the mouse equivalents of the
+ * ENTER/ESC shortcuts). 0 = "Start a New Game", 1 = "Disconnect", -1 = none. */
+int irrg_prep_button_hit(int x, int y)
+{
+  if (g_prep_start_w > 0 && x >= g_prep_start_x && x < g_prep_start_x + g_prep_start_w
+      && y >= g_prep_start_y && y < g_prep_start_y + g_prep_start_h) return 0;
+  if (g_prep_disc_w > 0 && x >= g_prep_disc_x && x < g_prep_disc_x + g_prep_disc_w
+      && y >= g_prep_disc_y && y < g_prep_disc_y + g_prep_disc_h) return 1;
+  return -1;
+}
 
 /* ---- Lifecycle ---- */
 void irrg_ui_init(void)
@@ -719,19 +734,52 @@ int irrg_ui_main(int argc, char *argv[])
         putline(l_conn, FONT_REQTREE_TEXT, &pc_body);
         putline("Status: connected, but no game is running yet (no map to show).",
                 FONT_REQTREE_TEXT, &pc_dim);
-        y += 16;
-        putline("  [ENTER]   Start a new game (choose map options)",
-                FONT_REQTREE_TEXT, &pc_hl);
-        putline("  [ESC]     Disconnect and return to the menu",
-                FONT_REQTREE_TEXT, &pc_hl);
+        /* Two clickable buttons (mouse-friendly equivalents of ENTER/ESC) so a
+         * mouse-only user can start a game or disconnect. Their rects are stored
+         * in g_prep_* for irrg_prep_button_hit (called from irrg_interact.cpp). */
+        {
+          static struct color b1_bg  = { 44, 84, 128 };
+          static struct color b1_bdr = { 120, 205, 255 };
+          static struct color b1_tx  = { 238, 246, 255 };
+          static struct color b2_bg  = { 58, 44, 48 };
+          static struct color b2_bdr = { 178, 118, 128 };
+          const int bw2 = 480, bh1 = 54, bh2 = 46;
+          const char *s1 = "Start a New Game   (choose map options)";
+          const char *s2 = "Disconnect and return to the menu";
+          /* Start a New Game */
+          g_prep_start_w = bw2; g_prep_start_h = bh1;
+          g_prep_start_x = W / 2 - bw2 / 2; g_prep_start_y = H / 2 + 24;
+          irrg_canvas_put_rectangle(pcv, &b1_bg,  g_prep_start_x, g_prep_start_y, bw2, bh1);
+          irrg_canvas_put_rectangle(pcv, &b1_bdr, g_prep_start_x, g_prep_start_y, bw2, 2);
+          irrg_canvas_put_rectangle(pcv, &b1_bdr, g_prep_start_x, g_prep_start_y + bh1 - 2, bw2, 2);
+          irrg_canvas_put_rectangle(pcv, &b1_bdr, g_prep_start_x, g_prep_start_y, 2, bh1);
+          irrg_canvas_put_rectangle(pcv, &b1_bdr, g_prep_start_x + bw2 - 2, g_prep_start_y, 2, bh1);
+          { int tw=0, th=0; irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, s1);
+            irrg_canvas_put_text(pcv, g_prep_start_x + (bw2 - tw)/2,
+                                 g_prep_start_y + (bh1 - th)/2, FONT_REQTREE_TEXT, &b1_tx, s1); }
+          /* Disconnect */
+          g_prep_disc_w = bw2; g_prep_disc_h = bh2;
+          g_prep_disc_x = W / 2 - bw2 / 2; g_prep_disc_y = g_prep_start_y + bh1 + 12;
+          irrg_canvas_put_rectangle(pcv, &b2_bg,  g_prep_disc_x, g_prep_disc_y, bw2, bh2);
+          irrg_canvas_put_rectangle(pcv, &b2_bdr, g_prep_disc_x, g_prep_disc_y, bw2, 2);
+          irrg_canvas_put_rectangle(pcv, &b2_bdr, g_prep_disc_x, g_prep_disc_y + bh2 - 2, bw2, 2);
+          irrg_canvas_put_rectangle(pcv, &b2_bdr, g_prep_disc_x, g_prep_disc_y, 2, bh2);
+          irrg_canvas_put_rectangle(pcv, &b2_bdr, g_prep_disc_x + bw2 - 2, g_prep_disc_y, 2, bh2);
+          { int tw=0, th=0; irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, s2);
+            irrg_canvas_put_text(pcv, g_prep_disc_x + (bw2 - tw)/2,
+                                 g_prep_disc_y + (bh2 - th)/2, FONT_REQTREE_TEXT, &b1_tx, s2); }
+        }
         if (connect_observer) {
-          y += 14;
-          putline("You chose OBSERVER: the server must grant that (the client",
-                  FONT_REQTREE_TEXT, &pc_dim);
-          putline("cannot ask for it). Local: run-observer.sh. Remote: ask the",
-                  FONT_REQTREE_TEXT, &pc_dim);
-          putline("server admin to run:  observe <yourname>",
-                  FONT_REQTREE_TEXT, &pc_dim);
+          int oy = g_prep_disc_y + g_prep_disc_h + 22;
+          auto putobs = [&] (const char *s) {
+            int tw = 0, th = 0;
+            irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, s);
+            irrg_canvas_put_text(pcv, W / 2 - tw / 2, oy, FONT_REQTREE_TEXT, &pc_dim, s);
+            oy += th + 6;
+          };
+          putobs("You chose OBSERVER: the server must grant that (the client");
+          putobs("cannot ask for it). Local: run-observer.sh. Remote: ask the");
+          putobs("server admin to run:  observe <yourname>");
         }
         g_vdriver->beginScene(true, true, video::SColor(255, 16, 16, 20));
         irrg_canvas_present(pcv);

@@ -183,9 +183,9 @@ void irrg_gamemenu_draw(struct canvas *cv, int win_w, int win_h)
   {
     int tw = 0, th = 0;
     irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT,
-                       "UP/DOWN select    ENTER run action    ESC close");
+                       "click a row    (or UP/DOWN + ENTER)    ESC close");
     irrg_canvas_put_text(cv, g_W / 2 - tw / 2, g_H - 44,
                          FONT_REQTREE_TEXT, &c_hint,
-                       "UP/DOWN select    ENTER run action    ESC close");
+                       "click a row    (or UP/DOWN + ENTER)    ESC close");
   }
 }

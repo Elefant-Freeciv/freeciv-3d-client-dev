@@ -59,4 +59,22 @@ void irrg_endturn_mouse_move(int mx, int my);
 bool irrg_report_or_help_open(void);   /* true if a report/help/messages panel is up */
 int  irrg_close_topmost_report_or_help(void);
 
+/* In-game persistent "Menu" button (top-right, to the LEFT of End Turn): opens
+ * the in-game menu -- the single GUI entry point for every action (reports,
+ * help, settings, fog, end turn, quit) -- so the game is playable with a mouse
+ * alone (no need to know the ESC shortcut). */
+void irrg_draw_menu_button(struct canvas *cv);
+bool irrg_menu_button_hit(int mx, int my);
+void irrg_menu_button_mouse_move(int mx, int my);
+
+/* City dialog mouse input: click a build-list row to start building it, or the
+ * close button to dismiss. Returns TRUE if the click landed inside the dialog
+ * (so the caller must not also hit-test the map behind it). */
+bool irrg_city_dialog_click(int x, int y, bool left);
+
+/* Report/Help/Log panels: a left click closes the topmost one (the mouse
+ * equivalent of ESC). Returns TRUE if a panel was open and the click was
+ * consumed (i.e. do not fall through to the map). */
+bool irrg_panel_click(int x, int y);
+
 #endif /* IRRG_DIALOGS_H */

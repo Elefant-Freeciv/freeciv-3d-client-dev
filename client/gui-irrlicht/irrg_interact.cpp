@@ -112,13 +112,30 @@ static struct tile *irrg_screen_to_tile(int sx, int sy)
 /* Handle a left (select) or right (move/recenter) click on the map. */
 static void irrg_handle_map_click(int sx, int sy, bool left)
 {
-  /* The End Turn button (top-right): a global command, checked before any map
-   * click so it never gets swallowed by a map action. */
+  /* Persistent top-right command buttons (checked first so they're never
+   * swallowed by a map action): Menu opens the in-game menu (the mouse path to
+   * every action); End Turn ends the turn. */
+  if (left && irrg_menu_button_hit(sx, sy)) {
+    irrg_open_gamemenu();
+    if (getenv("FC_IRR_UBDBG")) { fprintf(stderr, "[irrg] Menu clicked\n"); fflush(stderr); }
+    return;
+  }
   if (left && irrg_endturn_button_hit(sx, sy)) {
     user_ended_turn();
     if (getenv("FC_IRR_UBDBG")) { fprintf(stderr, "[irrg] End Turn clicked\n"); fflush(stderr); }
     return;
   }
+
+  /* City dialog (if open): a click on the build list starts that build, the
+   * close button dismisses it; any click inside the panel is consumed so it
+   * does not also select/move a unit on the map behind the dialog. */
+  if (irrg_city_dialog_click(sx, sy, left))
+    return;
+
+  /* Report/Help/Log panels: a left click closes the topmost one (the mouse
+   * equivalent of ESC), so they can be dismissed without a keyboard. */
+  if (left && irrg_panel_click(sx, sy))
+    return;
 
   /* Clicking the selected-unit dialog re-centres the 3D view on that unit. */
   if (left && irrg_unit_dialog_hit(sx, sy)) {
@@ -263,6 +280,27 @@ public:
       }
     }
 
+    /* PREPARING (mouse): click the on-screen buttons -- "Start a New Game"
+     * opens the new-game options, "Disconnect" returns to the main menu. This
+     * makes the whole pre-game flow reachable with a mouse alone. */
+    if (client_state() == C_S_PREPARING
+        && event.EventType == irr::EET_MOUSE_INPUT_EVENT
+        && event.MouseInput.Event == irr::EMIE_LMOUSE_LEFT_UP) {
+      int which = irrg_prep_button_hit(event.MouseInput.X, event.MouseInput.Y);
+      if (which == 0) {
+        irrg_open_newgame();
+        irrg_log("preparing: click -> opened new-game options screen");
+        return true;
+      }
+      if (which == 1) {
+        connection_close(&client.conn,
+                         "client disconnected (from preparing screen)");
+        irrg_log("preparing: click -> disconnecting");
+        return true;
+      }
+      return true;   /* swallow other clicks while the preparing screen is up */
+    }
+
     /* While the pre-game main menu is up, it owns all input (keyboard + mouse)
      * so the map/dialog handlers below don't fire. */
     if (irrg_menu_is_active()) {
@@ -336,6 +374,7 @@ public:
     case irr::EMIE_MOUSE_MOVED:
       irrg_unitbar_mouse_move(m.X, m.Y);   /* hover highlight for the bar */
       irrg_endturn_mouse_move(m.X, m.Y);   /* hover highlight for End Turn */
+      irrg_menu_button_mouse_move(m.X, m.Y); /* hover highlight for the Menu button */
       if (g_panning) {
         irrg_pan_step(m.X, m.Y);           /* middle- or left-drag panning */
       } else if (g_left_down && irrg_map3d_is_built()) {

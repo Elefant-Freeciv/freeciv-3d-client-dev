@@ -110,6 +110,14 @@ void irrg_draw_messages(struct canvas *cv)
 /* ------------------------------------------------------------------ */
 static struct city *g_city_dlg = nullptr;
 
+/* City-dialog layout (for mouse hit-testing): the panel rect, the build-list
+ * area (top-left + width), and the close button. Filled in irrg_draw_city_dialog.
+ * The game is meant to be playable with a mouse alone, so the build list +
+ * close are click-driven, not just keyboard. */
+static int g_cd_x = 0, g_cd_y = 0, g_cd_w = 0, g_cd_h = 0;
+static int g_cd_list_x = 0, g_cd_list_y = 0, g_cd_list_w = 0;
+static int g_cd_close_x = 0, g_cd_close_y = 0, g_cd_close_w = 0, g_cd_close_h = 0;
+
 /* ---- City production menu (start-building control) ---- */
 /* The list of things this city can build RIGHT NOW (improvements + units),
  * built when the dialog opens. The user navigates it with the arrow keys and
@@ -205,6 +213,42 @@ bool irrg_city_dialog_test_build(int index)
   return true;
 }
 
+/* Mouse input for the city dialog: a click on a build-list row starts building
+ * that item (the same city_change_production the keyboard Enter sends); a click
+ * on the close button dismisses it. Any click inside the panel is consumed so it
+ * does NOT also select/move a unit on the map behind the dialog. Returns TRUE if
+ * the click was inside the dialog (so the caller must not hit-test the map). */
+bool irrg_city_dialog_click(int x, int y, bool left)
+{
+  if (!g_city_dlg || g_cd_w <= 0) return false;
+  if (x < g_cd_x || x >= g_cd_x + g_cd_w || y < g_cd_y || y >= g_cd_y + g_cd_h)
+    return false;                        /* outside the panel -> let it hit the map */
+  if (left) {
+    /* Close button? */
+    if (x >= g_cd_close_x && x < g_cd_close_x + g_cd_close_w
+        && y >= g_cd_close_y && y < g_cd_close_y + g_cd_close_h) {
+      irrg_city_dialog_close();
+      return true;
+    }
+    /* A build-list row? -> select + build it. */
+    if (g_cp_n > 0 && x >= g_cd_list_x && x < g_cd_list_x + g_cd_list_w
+        && y >= g_cd_list_y && y < g_cd_list_y + CITY_PROD_SHOW * 20) {
+      int i = (y - g_cd_list_y) / 20;
+      int idx = g_cp_scroll + i;
+      if (i >= 0 && i < CITY_PROD_SHOW && idx >= 0 && idx < g_cp_n) {
+        g_cp_sel = idx;
+        city_change_production(g_city_dlg, &g_cp_list[idx]);
+        if (getenv("FC_IRR_UBDBG")) {
+          fprintf(stderr, "[irrg] city dialog click -> build '%s' (idx %d)\n",
+                  g_cp_name[idx], idx);
+          fflush(stderr);
+        }
+      }
+    }
+  }
+  return true;                            /* consumed (inside the dialog) */
+}
+
 void irrg_draw_city_dialog(struct canvas *cv)
 {
   if (!cv || !g_city_dlg) return;
@@ -213,6 +257,9 @@ void irrg_draw_city_dialog(struct canvas *cv)
   const int list_h = CITY_PROD_SHOW * 20;
   const int bw = 470, bh = 210 + list_h;
   const int bx = cv->width - bw - 14, by = 14;
+  g_cd_x = bx; g_cd_y = by; g_cd_w = bw; g_cd_h = bh;
+  g_cd_close_x = bx + bw - 36; g_cd_close_y = by + 6;
+  g_cd_close_w = 30; g_cd_close_h = 22;
   static struct color c_sel   = {  70,  90, 150 };  /* selected row bg   */
   static struct color c_cur   = { 120, 210, 120 };  /* current prod mark */
   static struct color c_hdr   = { 170, 190, 230 };  /* section header    */
@@ -223,6 +270,19 @@ void irrg_draw_city_dialog(struct canvas *cv)
   canvas_put_rectangle(cv, &c_border, bx,     by + bh - 2, bw, 2);
   canvas_put_rectangle(cv, &c_border, bx,     by,     2,  bh);
   canvas_put_rectangle(cv, &c_border, bx + bw - 2, by, 2,  bh);
+
+  /* Close button (top-right): a mouse affordance for dismissing the dialog. */
+  {
+    static struct color c_clb = { 66, 42, 46 };
+    static struct color c_clt = { 245, 140, 150 };
+    canvas_put_rectangle(cv, &c_clb, g_cd_close_x, g_cd_close_y,
+                         g_cd_close_w, g_cd_close_h);
+    int cw = 0, chh = 0;
+    irrg_get_text_size(&cw, &chh, FONT_REQTREE_TEXT, "X");
+    canvas_put_text(cv, g_cd_close_x + (g_cd_close_w - cw) / 2,
+                    g_cd_close_y + (g_cd_close_h - chh) / 2,
+                    FONT_REQTREE_TEXT, &c_clt, "X");
+  }
 
   char line[180], out[64];
   int ty = by + 12;
@@ -265,13 +325,14 @@ void irrg_draw_city_dialog(struct canvas *cv)
   ty += 6;
   char hdline[96];
   std::snprintf(hdline, sizeof(hdline),
-                "Start building (Up/Down + Enter): %d available", g_cp_n);
+                "Start building (click a row): %d available", g_cp_n);
   canvas_put_text(cv, bx + 12, ty, FONT_REQTREE_TEXT, &c_hdr, hdline);
   ty += 22;
 
   /* Buildable list (scrollable). */
   const int list_x = bx + 12;
   const int list_w = bw - 24;
+  g_cd_list_x = list_x; g_cd_list_y = ty; g_cd_list_w = list_w;   /* for clicks */
   for (int i = 0; i < CITY_PROD_SHOW; ++i) {
     int idx = g_cp_scroll + i;
     if (idx >= g_cp_n) break;
@@ -289,10 +350,10 @@ void irrg_draw_city_dialog(struct canvas *cv)
   }
   ty += list_h + 6;
 
-  /* Footer (kept short so it fits the 470px-wide panel; Up/Down is the only
-   * supported navigation -- Irrlicht 1.8.5 has no PgUp/PgDn). */
+  /* Footer (kept short so it fits the 470px-wide panel; mouse clicks work, the
+   * arrow keys are the fallback -- Irrlicht 1.8.5 has no PgUp/PgDn). */
   canvas_put_text(cv, bx + 12, by + bh - 22, FONT_REQTREE_TEXT,
-                  &c_yellow, "[Up/Down:select]  [Enter:build]  [ESC:close]");
+                  &c_yellow, "[click a row:build]   [X:close]");
 }
 
 /* ==================================================================
@@ -327,6 +388,20 @@ int irrg_close_topmost_report_or_help(void)
 }
 
 bool irrg_report_or_help_open(void) { return (g_report_open != 0 || g_help_open != 0 || g_log_open != 0); }
+
+/* Mouse close for the report/help/log panels: while one is open, ANY left click
+ * dismisses it (the mouse equivalent of ESC). A small "Close" button is drawn on
+ * the panel as a visible affordance for WHERE to click. Returns TRUE if a panel
+ * was open and the click was consumed (the caller must not hit-test the map). */
+bool irrg_panel_click(int x, int y)
+{
+  (void)x; (void)y;
+  if (irrg_report_or_help_open()) {
+    irrg_close_topmost_report_or_help();
+    return true;
+  }
+  return false;
+}
 
 static const char *irrg_rep_title(int kind)
 {
@@ -388,13 +463,26 @@ static void irrg_draw_panel_lines(struct canvas *cv, const char *title,
   canvas_put_rectangle(cv, &c_border, px, py,            2,  ph);
   canvas_put_rectangle(cv, &c_border, px + pw - 2, py,   2,  ph);
   canvas_put_text(cv, px + 14, py + 8, FONT_CITY_NAME, &c_title, title);
+  /* Close button (top-right): a visible affordance -- any click dismisses the
+   * panel (irrg_panel_click), so it can be closed with a mouse alone. */
+  {
+    static struct color c_clb = { 66, 42, 46 };
+    static struct color c_clt = { 245, 140, 150 };
+    const int cbw = 56, cbh = 22;
+    int cbx = px + pw - cbw - 6, cby = py + 8;
+    canvas_put_rectangle(cv, &c_clb, cbx, cby, cbw, cbh);
+    int cw = 0, chh = 0;
+    irrg_get_text_size(&cw, &chh, FONT_REQTREE_TEXT, "Close");
+    canvas_put_text(cv, cbx + (cbw - cw) / 2, cby + (cbh - chh) / 2,
+                    FONT_REQTREE_TEXT, &c_clt, "Close");
+  }
   int ty = py + head_h;
   for (int i = 0; i < shown; ++i) {
     canvas_put_text(cv, px + 14, ty, FONT_REQTREE_TEXT, &c_body, lines[i]);
     ty += line_h;
   }
   canvas_put_text(cv, px + 14, py + ph - 20, FONT_REQTREE_TEXT, &c_yellow,
-                  "[ESC to close]");
+                  "[ESC / click to close]");
 }
 
 static void irrg_draw_report(struct canvas *cv)
@@ -575,6 +663,62 @@ void irrg_endturn_mouse_move(int mx, int my)
   g_et_my = my;
 }
 
+/* ------------------------------------------------------------------ */
+/* In-game persistent "Menu" button (top-right, to the LEFT of End Turn).
+ * Opens the in-game menu -- the single GUI entry point for every action
+ * (reports, help, settings, fog, end turn, quit). Because it is always on
+ * screen, the whole game is operable with a mouse alone (no ESC needed). */
+static int g_mb_x = 0, g_mb_y = 0, g_mb_w = 0, g_mb_h = 28;
+static int g_mb_mx = -1, g_mb_my = -1;
+
+void irrg_draw_menu_button(struct canvas *cv)
+{
+  g_mb_w = 0;
+  if (!cv) return;
+  if (client_state() != C_S_RUNNING) return;
+  if (irrg_city_dialog_is_open()) return;     /* hidden while a modal is up */
+  static struct color c_mb    = { 22, 24, 30 };
+  static struct color c_mbd   = { 125, 135, 160 };
+  static struct color c_mbt   = { 226, 229, 239 };
+  static struct color c_mbh   = { 46, 56, 82 };      /* lighter fill on hover */
+  static struct color c_mhbrd = { 120, 205, 255 };   /* bright border on hover */
+  const char *label = "Menu";
+  int tw = 0, th = 0;
+  irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, label);
+  g_mb_w = tw + 20;
+  g_mb_h = th + 12;
+  /* Sit to the LEFT of the End Turn button (drawn just before us in
+   * irrg_draw_dialogs). Fall back to the right edge if it isn't available. */
+  g_mb_y = g_et_y;
+  g_mb_x = (g_et_x > 0) ? (g_et_x - 8 - g_mb_w) : (cv->width - g_mb_w - 10);
+  bool hovered = (g_mb_mx >= g_mb_x && g_mb_mx < g_mb_x + g_mb_w
+                  && g_mb_my >= g_mb_y && g_mb_my < g_mb_y + g_mb_h);
+  struct color fill = hovered ? c_mbh : c_mb;
+  struct color bdr  = hovered ? c_mhbrd : c_mbd;
+  canvas_put_rectangle(cv, &fill, g_mb_x, g_mb_y, g_mb_w, g_mb_h);
+  canvas_put_rectangle(cv, &bdr,  g_mb_x, g_mb_y, g_mb_w, 2);
+  canvas_put_rectangle(cv, &bdr,  g_mb_x, g_mb_y + g_mb_h - 2, g_mb_w, 2);
+  canvas_put_rectangle(cv, &bdr,  g_mb_x, g_mb_y, 2, g_mb_h);
+  canvas_put_rectangle(cv, &bdr,  g_mb_x + g_mb_w - 2, g_mb_y, 2, g_mb_h);
+  canvas_put_text(cv, g_mb_x + (g_mb_w - tw) / 2, g_mb_y + (g_mb_h - th) / 2,
+                  FONT_REQTREE_TEXT, &c_mbt, label);
+}
+
+bool irrg_menu_button_hit(int mx, int my)
+{
+  if (client_state() != C_S_RUNNING) return false;
+  if (irrg_city_dialog_is_open()) return false;
+  if (g_mb_w <= 0) return false;
+  return (mx >= g_mb_x && mx < g_mb_x + g_mb_w
+          && my >= g_mb_y && my < g_mb_y + g_mb_h);
+}
+
+void irrg_menu_button_mouse_move(int mx, int my)
+{
+  g_mb_mx = mx;
+  g_mb_my = my;
+}
+
 void irrg_draw_dialogs(struct canvas *cv)
 {
   if (!cv) return;
@@ -590,7 +734,7 @@ void irrg_draw_dialogs(struct canvas *cv)
     static struct color c_hinttx = { 200, 205, 215 };
     static struct color c_hintbg = { 24, 26, 32 };
     static struct color c_hinthy = { 130, 215, 130 };
-    const char *s = "ESC:Menu  R/O/S:Reports  H:Help  L:Log  F:Fog  G:Graphics   |   drag:pan  wheel:zoom";
+    const char *s = "Menu + End Turn: top-right   |   click unit: select, click tile: move   |   drag: pan, wheel: zoom";
     int tw = 0, th = 0;
     irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, s);
     canvas_put_rectangle(cv, &c_hintbg, 5, 6, tw + 6, th + 4);
@@ -615,8 +759,10 @@ void irrg_draw_dialogs(struct canvas *cv)
     canvas_put_text(cv, 8, 6 + th + 8, FONT_REQTREE_TEXT, &c_hinthy, line2);
   }
 
-  /* End Turn button (top-right) -- always available in-game, no unit needed. */
+  /* End Turn + Menu buttons (top-right) -- always available in-game; the Menu
+   * button is the mouse entry point to every in-game action (no ESC needed). */
   irrg_draw_endturn_button(cv);
+  irrg_draw_menu_button(cv);
 
   /* Selected-unit info panel (bottom-left corner) + the unit action buttons
    * (bottom centre) for the focused unit. Both work in the 3D and 2D views and

@@ -222,9 +222,9 @@ void irrg_newgame_draw(struct canvas *cv, int win_w, int win_h)
   {
     int tw = 0, th = 0;
     irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT,
-                       "UP/DOWN select    LEFT/RIGHT change    ENTER start/apply    ESC cancel");
+                       "click a row / value    (or arrows)    click Start Game");
     irrg_canvas_put_text(cv, g_W / 2 - tw / 2, g_H - 44,
                          FONT_REQTREE_TEXT, &c_hint,
-                       "UP/DOWN select    LEFT/RIGHT change    ENTER start/apply    ESC cancel");
+                       "click a row / value    (or arrows)    click Start Game");
   }
 }
