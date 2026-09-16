@@ -1175,8 +1175,11 @@ void irrg_map3d_edge_pan(int win_w, int win_h, int mx, int my)
   /* camera-right = world +x; screen-down = world +z (see fx() + camera setup). */
   if (left)  dx -= sp;   /* reveal the east side  -> camera pans right (world +x) */
   if (right) dx += sp;   /* reveal the west side  -> camera pans left  (world -x) */
-  if (up)    dz -= sp;   /* reveal the south side -> camera pans down  (world +z) */
-  if (down)  dz += sp;   /* reveal the north side -> camera pans up    (world -z) */
+  /* Top/bottom edge-pan INVERTED (user preference): hovering the TOP edge
+   * pans the camera toward larger world_z, the BOTTOM edge toward smaller.
+   * (Left/right edge-pan is unchanged.) */
+  if (up)    dz += sp;
+  if (down)  dz -= sp;
   irrg_map3d_pan(dx, dz);
   if (std::getenv("FC_IRR_EDGE")) {
     std::fprintf(stderr, "[irrg] edge(%s%s%s%s) cam=(%.1f,%.1f)\n",
