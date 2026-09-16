@@ -143,6 +143,18 @@ static void irrg_handle_map_click(int sx, int sy, bool left)
     return;
   }
 
+  /* Minimap (bottom-right, 3D only): a left click jumps the camera to that
+   * tile -- high-speed navigation without dragging. Consumed so it never
+   * also selects/moves a unit on the map. */
+  {
+    int mtx = 0, mty = 0;
+    if (left && irrg_minimap_hit(sx, sy, &mtx, &mty)) {
+      irrg_map3d_goto(mtx, mty);
+      if (getenv("FC_IRR_UBDBG")) { fprintf(stderr, "[irrg] minimap -> goto(%d,%d)\n", mtx, mty); fflush(stderr); }
+      return;
+    }
+  }
+
   struct tile *ptile = irrg_screen_to_tile(sx, sy);
   if (!ptile)
     return;
@@ -205,6 +217,7 @@ static void irrg_handle_map_click(int sx, int sy, bool left)
  * moves past a small threshold (a plain left press+release is still a select
  * click), translates the camera so the ground point under the cursor at drag
  * start stays fixed under the cursor. */
+static int   g_mouse_x = -1, g_mouse_y = -1;   /* last cursor position (px) */
 static bool  g_panning       = false;
 static float g_pan_anchor_x  = 0.0f, g_pan_anchor_y = 0.0f;
 static bool  g_left_down     = false;
@@ -225,6 +238,14 @@ static void irrg_pan_step(int mx, int my)
   float nx = 0.0f, ny = 0.0f;
   if (irrg_map3d_pick_world(mx, my, &nx, &ny))
     irrg_map3d_pan(g_pan_anchor_x - nx, g_pan_anchor_y - ny);
+}
+
+/* Last observed cursor position (pixels), for the edge-hover pan. (-1,-1) until
+ * the first mouse-move event. */
+void irrg_mouse_get(int *x, int *y)
+{
+  if (x) *x = g_mouse_x;
+  if (y) *y = g_mouse_y;
 }
 
 /* Irrlicht 1.8.5 event receiver: handles mouse input on the map. */
@@ -372,6 +393,7 @@ public:
     const irr::SEvent::SMouseInput &m = event.MouseInput;
     switch (m.Event) {
     case irr::EMIE_MOUSE_MOVED:
+      g_mouse_x = m.X; g_mouse_y = m.Y;    /* track the cursor for edge-hover pan */
       irrg_unitbar_mouse_move(m.X, m.Y);   /* hover highlight for the bar */
       irrg_endturn_mouse_move(m.X, m.Y);   /* hover highlight for End Turn */
       irrg_menu_button_mouse_move(m.X, m.Y); /* hover highlight for the Menu button */

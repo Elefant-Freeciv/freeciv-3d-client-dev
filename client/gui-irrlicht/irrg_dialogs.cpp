@@ -19,7 +19,10 @@
 #include "unit.h"          /* unit fields, get_activity_text() */
 #include "improvement.h"   /* improvement_iterate, struct impr_type */
 #include "world_object.h"  /* wld.map (can_city_build_now needs the map) */
-#include "map.h"           /* index_to_map_pos_x/y, tile_index */
+#include "map.h"           /* index_to_map_pos_x/y, tile_index, map_pos_to_tile */
+#include "tile.h"          /* tile_terrain() */
+#include "climap.h"        /* client_tile_get_known() */
+#include "terrain.h"       /* terrain_type_terrain_class(), TC_OCEAN */
 #include "citydlg_common.h"/* city_change_production, get_city_dialog_* */
 #include <irrlicht.h>   /* irr::E_KEY_CODE for the production-menu key input */
 
@@ -719,10 +722,85 @@ void irrg_menu_button_mouse_move(int mx, int my)
   g_mb_my = my;
 }
 
+/* ---- Minimap (3D): a small colour map of the whole explored map + a viewport
+ * rectangle showing where the 3D camera is looking. Click it to jump there. ---- */
+static int g_mm_x = 0, g_mm_y = 0, g_mm_s = 0;   /* box (set during draw) */
+
+static void mm_tile_color(const struct tile *pt, struct color *c)
+{
+  if (!pt || client_tile_get_known(pt) == TILE_UNKNOWN || !tile_terrain(pt)) {
+    c->r = 20; c->g = 20; c->b = 24;            /* fog / not explored */
+    return;
+  }
+  if (terrain_type_terrain_class(tile_terrain(pt)) == TC_OCEAN) {
+    c->r = 26; c->g = 74; c->b = 165;           /* water */
+  } else {
+    c->r = 62; c->g = 122; c->b = 52;           /* land */
+  }
+}
+
+void irrg_draw_minimap(struct canvas *cv)
+{
+  if (!cv || !cv->pixels) return;
+  if (!irrg_map3d_is_built()) return;   /* 3D only (the viewport is the 3D cam) */
+  const int MM = 150;
+  const int mw = wld.map.xsize, mh = wld.map.ysize;
+  if (mw <= 0 || mh <= 0) return;
+  g_mm_x = cv->width - MM - 10;
+  g_mm_y = cv->height - MM - 10;
+  g_mm_s = MM;
+  irr::video::SColor *cvpx = (irr::video::SColor *)cv->pixels;
+  for (int y = 0; y < MM; ++y) {
+    int ty = (y * mh) / MM;
+    for (int x = 0; x < MM; ++x) {
+      int tx = (x * mw) / MM;
+      struct tile *pt = map_pos_to_tile(&wld.map, tx, ty);
+      struct color col;
+      mm_tile_color(pt, &col);
+      cvpx[(g_mm_y + y) * cv->width + (g_mm_x + x)] =
+          irr::video::SColor(255, col.r, col.g, col.b);
+    }
+  }
+  /* Viewport rectangle (where the 3D camera is looking). */
+  int vtx = 0, vty = 0, vhalf = 0;
+  irrg_map3d_camera_view(&vtx, &vty, &vhalf);
+  int cx = g_mm_x + (vtx * MM) / mw;
+  int cy = g_mm_y + (vty * MM) / mh;
+  int hw = (vhalf * MM) / mw;
+  int hh = (vhalf * MM) / mh;
+  static struct color c_vp  = { 255, 255, 255 };
+  static struct color c_bdr = { 210, 210, 210 };
+  /* Viewport as a thin OUTLINE (not a filled box) so the map shows through. */
+  int vx0 = cx - hw, vy0 = cy - hh, vx1 = cx + hw, vy1 = cy + hh;
+  canvas_put_rectangle(cv, &c_vp, vx0, vy0, vx1 - vx0 + 1, 2);       /* top    */
+  canvas_put_rectangle(cv, &c_vp, vx0, vy1 - 1, vx1 - vx0 + 1, 2);   /* bottom */
+  canvas_put_rectangle(cv, &c_vp, vx0, vy0, 2, vy1 - vy0 + 1);       /* left   */
+  canvas_put_rectangle(cv, &c_vp, vx1 - 1, vy0, 2, vy1 - vy0 + 1);   /* right  */
+  canvas_put_rectangle(cv, &c_bdr, g_mm_x, g_mm_y, MM, 1);          /* top    */
+  canvas_put_rectangle(cv, &c_bdr, g_mm_x, g_mm_y + MM - 1, MM, 1); /* bottom */
+  canvas_put_rectangle(cv, &c_bdr, g_mm_x, g_mm_y, 1, MM);          /* left   */
+  canvas_put_rectangle(cv, &c_bdr, g_mm_x + MM - 1, g_mm_y, 1, MM); /* right  */
+}
+
+/* Hit-test the minimap box; on a hit set *out_tx/*out_ty to the clicked map
+ * tile (for click-to-jump). Returns 1 if inside the box. */
+int irrg_minimap_hit(int x, int y, int *out_tx, int *out_ty)
+{
+  if (g_mm_s <= 0) return 0;
+  if (x < g_mm_x || x >= g_mm_x + g_mm_s || y < g_mm_y || y >= g_mm_y + g_mm_s)
+    return 0;
+  int mw = wld.map.xsize, mh = wld.map.ysize;
+  if (mw <= 0 || mh <= 0) return 0;
+  *out_tx = (int)((long)(x - g_mm_x) * mw / g_mm_s);
+  *out_ty = (int)((long)(y - g_mm_y) * mh / g_mm_s);
+  return 1;
+}
+
 void irrg_draw_dialogs(struct canvas *cv)
 {
   if (!cv) return;
   irrg_draw_city_dialog(cv);
+  irrg_draw_minimap(cv);
   /* The persistent bottom-left message window moved to the "Messages" submenu
    * (irrg_draw_messages_panel), freeing that corner for the unit info dialog. */
   if (g_report_open) irrg_draw_report(cv);
@@ -769,6 +847,9 @@ void irrg_draw_dialogs(struct canvas *cv)
    * are no-ops unless a unit is focused. */
   irrg_draw_unit_dialog(cv);
   irrg_unitbar_draw(cv);
+
+  /* (minimap is drawn up-front, after the city dialog, so it sits under the
+   * top-right buttons but stays visible over the map) */
 
   /* FC_IRR_PICKGRID: overlay the screen->tile pick at a grid of points, so you
    * can SEE whether the picked tile lines up with the rendered tile under each

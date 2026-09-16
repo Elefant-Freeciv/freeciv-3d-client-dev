@@ -55,7 +55,19 @@ int  irrg_map3d_pick_world(int mx, int my, float *out_x, float *out_y);
 void irrg_map3d_center_on(int tx, int ty);
 void irrg_map3d_focus_unit(int tx, int ty);
 void irrg_map3d_refocus_current_unit(void);
-void irrg_map3d_pan(int dx, int dz);
+void irrg_map3d_pan(float dx, float dz);
+/* Civ4-style edge-hover panning: if the cursor is within a few px of a window
+ * edge, slide the map toward that edge (the camera pans in the matching
+ * direction). Call each frame in the 3D path with the window size + cursor.
+ * No-op when the cursor is in the interior. */
+void irrg_map3d_edge_pan(int win_w, int win_h, int mx, int my);
+/* The camera's centre in base-map TILE coords (0..map_w / 0..map_h, un-mirrored,
+ * wrap-offset removed) + an approximate half-extent (tiles) of the visible
+ * area -- for drawing a minimap viewport indicator. */
+void irrg_map3d_camera_view(int *out_tx, int *out_ty, int *out_half);
+/* Jump the camera to look at map tile (tx, ty) (minimap click-to-jump); resets
+ * the wrap tiling offset back to the base span. */
+void irrg_map3d_goto(int tx, int ty);
 void irrg_map3d_zoom(int delta);
 void irrg_map3d_destroy(void);
 

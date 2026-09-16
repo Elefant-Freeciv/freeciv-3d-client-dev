@@ -56,7 +56,8 @@ scene::ISceneManager   *smgr   = 0;
 video::IVideoDriver    *vdrv   = 0;
 scene::ICameraSceneNode *camera = 0;
 scene::ISceneNode      *map_parent = 0;
-scene::IMeshSceneNode  *map_node   = 0;
+scene::IMeshSceneNode  *map_nodes[3][3] = {{0}};  /* 3x3 wrap copies (k,j in -1..1) */
+int                     g_wrap_off_x = 0, g_wrap_off_y = 0;  /* tiling offset (mult. of mw/mh) */
 video::ITexture        *map_tex    = 0;   /* held for the map's life */
 core::vector3df cam_pos, cam_target;
 
@@ -182,7 +183,13 @@ static int terrain_orient_index(struct tile *ptile)
   struct tile *nb;
   enum direction8 d;
   cardinal_adjc_dir_iterate(&wld.map, ptile, nb, d) {
-    if (tile_terrain(nb) != self) {
+    const struct terrain *nt = tile_terrain(nb);
+    /* An adjacent OPEN-OCEAN tile is NOT a "different terrain" edge: the sea
+     * reads as one continuous water body, so counting ocean as an edge put
+     * spurious land-edges out in the middle of the sea (ocean meeting deep
+     * ocean) and turned the coastline's shoreline edge the wrong way. Land
+     * biome differences (e.g. desert|plains) still count as edges. */
+    if (nt && terrain_type_terrain_class(nt) != TC_OCEAN && nt != self) {
       switch (d) {
       case DIR8_NORTH: dn = true; break;
       case DIR8_EAST:  de = true; break;
@@ -265,6 +272,83 @@ void place_camera(int cx, int cy)
     camera->setPosition(cam_pos);
     camera->setTarget(cam_target);
   }
+}
+
+/* ---- Seamless map wrapping (3x3 tiled copies) ----
+ * The merged terrain mesh covers world [0,mw) x [0,mh). For a wrapping map we
+ * render up to 9 copies of the SAME mesh, offset by (k*mw, j*mh), so panning
+ * past a map edge shows the wrapped side -- seamless scrolling, like the demo.
+ * The copies follow the camera (g_wrap_off_x/y keeps the base copy bracketed).
+ */
+static bool map_wrap_x(void) { return wrap_has_flag(wld.map.wrap_id, WRAP_X); }
+static bool map_wrap_y(void) { return wrap_has_flag(wld.map.wrap_id, WRAP_Y); }
+static bool map_wrap_any(void)
+{
+  static int v = -1;
+  if (v < 0) {
+    bool w = (map_wrap_x() || map_wrap_y());
+    const char *e = std::getenv("FC_IRR_WRAP");
+    if (e && e[0] == '0') w = false;   /* FC_IRR_WRAP=0 disables the tiling */
+    v = w ? 1 : 0;
+  }
+  return v == 1;
+}
+static void remove_map_nodes(void)
+{
+  for (int j = 0; j < 3; ++j)
+    for (int k = 0; k < 3; ++k)
+      if (map_nodes[j][k]) { map_nodes[j][k]->remove(); map_nodes[j][k] = 0; }
+}
+static void create_map_nodes(scene::IMesh *mesh)
+{
+  remove_map_nodes();
+  bool wx = map_wrap_x(), wy = map_wrap_y();
+  int made = 0;
+  for (int j = -1; j <= 1; ++j)
+    for (int k = -1; k <= 1; ++k) {
+      /* Only the centre copy unless the map wraps on that axis. */
+      if ((k != 0 && !wx) || (j != 0 && !wy)) continue;
+      scene::IMeshSceneNode *n = smgr->addMeshSceneNode(mesh);
+      if (!n) continue;
+      n->setPosition(core::vector3df((f32)(k * mw + g_wrap_off_x), 0.0f,
+                                     (f32)(j * mh + g_wrap_off_y)));
+      if (map_tex) n->setMaterialTexture(0, map_tex);
+      n->setMaterialFlag(video::EMF_LIGHTING, false);
+      if (map_parent) n->setParent(map_parent);
+      map_nodes[j + 1][k + 1] = n;
+      ++made;
+    }
+  (void)made;
+}
+/* Keep the wrap copies bracketing the camera: as it pans past the base copy's
+ * [0,mw)x[0,mh) span, shift every copy by a whole map so the view is always
+ * covered (the mesh pattern repeats every mw/mh, so this is seamless). */
+static void update_wrap(void)
+{
+  if (!built) return;
+  bool changed = false;
+  if (map_wrap_x()) {
+    f32 rel = cam_target.X - (f32)g_wrap_off_x;
+    if (rel < 0)            { g_wrap_off_x -= mw; changed = true; }
+    else if (rel >= mw)     { g_wrap_off_x += mw; changed = true; }
+  }
+  if (map_wrap_y()) {
+    f32 rel = cam_target.Z - (f32)g_wrap_off_y;
+    if (rel < 0)            { g_wrap_off_y -= mh; changed = true; }
+    else if (rel >= mh)     { g_wrap_off_y += mh; changed = true; }
+  }
+  if (!changed) return;
+  if (std::getenv("FC_IRR_WRAPLOG")) {
+    std::fprintf(stderr, "[irrg] wrap-shift cam_target=(%.1f,%.1f) -> off=(%d,%d)\n",
+                 cam_target.X, cam_target.Z, g_wrap_off_x, g_wrap_off_y);
+    std::fflush(stderr);
+  }
+  for (int j = 0; j < 3; ++j)
+    for (int k = 0; k < 3; ++k)
+      if (map_nodes[j][k])
+        map_nodes[j][k]->setPosition(core::vector3df((f32)((k - 1) * mw + g_wrap_off_x),
+                                                     0.0f,
+                                                     (f32)((j - 1) * mh + g_wrap_off_y)));
 }
 
 /* ---- Unit billboards + selection ring (Phase 5b) ------------------------ */
@@ -397,6 +481,40 @@ video::ITexture *make_ring_texture(void)
   video::ITexture *tex = vdrv->addTexture("irrg_ring", img);
   img->drop();
   return tex;
+}
+
+/* A FLAT ring lying on the terrain plane: a single quad (two triangles in the
+ * XZ plane) carrying the radial ring texture. Viewed by the down-angled camera
+ * it reads as a glowing circle painted on the ground (the unit-selected
+ * highlight) rather than a camera-facing billboard. The ring's transparent
+ * centre + corners mean only the circular band is visible. */
+static scene::ISceneNode *make_flat_ring_node(void)
+{
+  if (!smgr || !ring_tex) return 0;
+  scene::SMesh *m = new scene::SMesh();
+  m->setHardwareMappingHint(scene::EHM_STATIC);
+  scene::SMeshBuffer *b = new scene::SMeshBuffer();
+  b->setHardwareMappingHint(scene::EHM_STATIC);
+  const f32 R = 0.85f;   /* half the quad (world units); the ring sits inside */
+  video::S3DVertex v[4];
+  v[0] = video::S3DVertex(-R, 0.0f, -R, 0, 1, 0, video::SColor(255,255,255,255), 0, 0);
+  v[1] = video::S3DVertex( R, 0.0f, -R, 0, 1, 0, video::SColor(255,255,255,255), 1, 0);
+  v[2] = video::S3DVertex( R, 0.0f,  R, 0, 1, 0, video::SColor(255,255,255,255), 1, 1);
+  v[3] = video::S3DVertex(-R, 0.0f,  R, 0, 1, 0, video::SColor(255,255,255,255), 0, 1);
+  u16 idx[6] = { 0, 1, 2, 0, 2, 3 };
+  b->append((const void *)v, 4, idx, 6);
+  b->recalculateBoundingBox();
+  m->addMeshBuffer(b);   /* takes ownership of b */
+  scene::ISceneNode *n = smgr->addMeshSceneNode(m);
+  m->drop();             /* the scene node owns the mesh now */
+  if (n) {
+    n->setMaterialTexture(0, ring_tex);
+    n->setMaterialFlag(video::EMF_LIGHTING, false);
+    n->setMaterialFlag(video::EMF_ZWRITE_ENABLE, false);
+    n->setMaterialType(video::EMT_TRANSPARENT_ADD_COLOR);  /* additive glow */
+    if (unit_parent) n->setParent(unit_parent);
+  }
+  return n;
 }
 
 /* Build a merged SMesh of every currently-explored tile (TILE_UNKNOWN and
@@ -538,6 +656,22 @@ static bool camfollow_on(void)
 int irrg_map3d_refresh_tiles(void)
 {
   if (!built || !smgr) return 0;
+  update_wrap();   /* keep the 3x3 wrap copies bracketing the camera (each frame) */
+  if (std::getenv("FC_IRR_WRAPLOG")) {
+    static int wc = 0;
+    if ((++wc % 45) == 0) {
+      std::fprintf(stderr, "[irrg] wrap-dump cam=(%.1f,%.1f) off=(%d,%d) H=%.1f nodes:",
+                   cam_target.X, cam_target.Z, g_wrap_off_x, g_wrap_off_y, g_cam_height);
+      for (int j = 0; j < 3; ++j)
+        for (int k = 0; k < 3; ++k) {
+          if (map_nodes[j][k]) {
+            core::vector3df p = map_nodes[j][k]->getAbsolutePosition();
+            std::fprintf(stderr, " (%.0f,%.0f)", p.X, p.Z);
+          } else std::fprintf(stderr, " --");
+        }
+      std::fprintf(stderr, "\n"); std::fflush(stderr);
+    }
+  }
 
   /* (opt-in, FC_IRR_CAMFOLLOW=1) Centre the view on the focused unit whenever
    * the selection changes to a unit. OFF by default so the camera stays put. */
@@ -565,14 +699,8 @@ int irrg_map3d_refresh_tiles(void)
   scene::IMesh *mesh = build_terrain_mesh(&be, &rendered, &fogged, &missing,
                                           &oriented, &orients, 0, 0);
   if (!mesh) return 0;
-  scene::IMeshSceneNode *nnode = smgr->addMeshSceneNode(mesh);
-  mesh->drop();               /* the new node owns the mesh now */
-  if (map_tex) nnode->setMaterialTexture(0, map_tex);
-  nnode->setMaterialFlag(video::EMF_LIGHTING, false);
-  if (map_parent) nnode->setParent(map_parent);
-  scene::IMeshSceneNode *old = map_node;
-  map_node = nnode;           /* swap in the fresh mesh before removing the old */
-  if (old) old->remove();
+  create_map_nodes(mesh);      /* remove old copies + add fresh ones (new mesh) */
+  mesh->drop();                /* the new nodes own the mesh now */
   std::fprintf(stderr,
     "[irrg] map3d: refresh -> explored=%d rendered=%d fog=%d missing=%d\n",
     explored, rendered, fogged, missing);
@@ -632,18 +760,15 @@ int irrg_map3d_build(void)
     }
   }
   map_parent = smgr->addEmptySceneNode();
-  map_node = smgr->addMeshSceneNode(mesh);
-  mesh->drop();               /* the scene node owns the mesh now */
-  map_node->setParent(map_parent);
   std::string texpath = art_root + "/terrain/tex.png";
   map_tex = vdrv->getTexture(texpath.c_str());
   std::fprintf(stderr, "[irrg] map3d: texture %s -> %p size=%ux%u\n",
                texpath.c_str(), (void *)map_tex,
                map_tex ? map_tex->getSize().Width : 0,
                map_tex ? map_tex->getSize().Height : 0);
-  if (map_tex)
-    map_node->setMaterialTexture(0, map_tex);
-  map_node->setMaterialFlag(video::EMF_LIGHTING, false);
+  create_map_nodes(mesh);      /* 3x3 tiled copies (wrapping) or a single copy */
+  mesh->drop();                /* the scene nodes own the mesh now */
+  g_wrap_off_x = 0; g_wrap_off_y = 0;
 
   /* Center the camera on the explored tiles' centroid (robust: doesn't depend
    * on the local player's city being loaded yet). */
@@ -799,29 +924,20 @@ void irrg_map3d_draw_units(void)
     }
   }
 
-  /* Glowing, animated selection ring around the focused unit. */
+  /* Glowing, ANIMATED selection circle: a flat ring on the terrain plane
+   * (a horizontal disc offset just above the ground) around the focused unit,
+   * pulsing in size. A circle painted on the terrain, not a camera-facing
+   * billboard square. */
   struct unit *funit = head_of_units_in_focus();
   if (funit && unit_tile(funit) && ring_tex) {
     int tx = index_to_map_pos_x(tile_index(unit_tile(funit)));
     int ty = index_to_map_pos_y(tile_index(unit_tile(funit)));
     ring_anim_t += 0.033f;
     f32 pulse = 0.95f + 0.18f * std::sin(ring_anim_t * 3.2f);
-    if (!ring_node) {
-      scene::ISceneNode *rn = smgr->addBillboardSceneNode(
-          unit_parent, core::dimension2d<f32>(1.8f, 1.8f),
-          core::vector3df((f32)fx(tx), 0.5f, (f32)ty), -1,
-          video::SColor(255, 255, 255, 255), video::SColor(255, 255, 255, 255));
-      if (rn) {
-        rn->setMaterialTexture(0, ring_tex);
-        rn->setMaterialFlag(video::EMF_LIGHTING, false);
-        rn->setMaterialFlag(video::EMF_ZWRITE_ENABLE, false);
-        rn->setMaterialType(video::EMT_TRANSPARENT_ADD_COLOR);   /* additive => glow */
-        ring_node = rn;
-      }
-    }
+    if (!ring_node) ring_node = make_flat_ring_node();
     if (ring_node) {
       ring_node->setVisible(true);
-      ring_node->setPosition(core::vector3df((f32)fx(tx), 0.5f, (f32)ty));
+      ring_node->setPosition(core::vector3df((f32)fx(tx), 0.35f, (f32)ty));
       ring_node->setScale(core::vector3df(pulse, pulse, pulse));
     }
   } else if (ring_node) {
@@ -862,7 +978,7 @@ void irrg_map3d_draw_cities_and_resources(void)
         int tw = 0, th = 0;
         video::ITexture *tex = city_style_texture(style, &tw, &th);
         if (!tex || tw <= 0) continue;
-        f32 scale = 1.4f;                              /* a bit over one tile */
+        f32 scale = 1.4f * 0.75f;                      /* 75% of the original city size */
         f32 bh = (f32)th / (f32)tw * scale;            /* keep the aspect */
         scene::ISceneNode *node = smgr->addBillboardSceneNode(
             unit_parent, core::dimension2d<f32>(scale, bh), pos, -1,
@@ -958,14 +1074,46 @@ int irrg_map3d_pick(int mx, int my, int *out_x, int *out_y)
 {
   core::vector3df hit;
   if (!ground_hit(mx, my, &hit)) return 0;
-  *out_x = fx((int)std::lround(hit.X));
-  *out_y = (int)std::lround(hit.Z);
+  f32 wx = hit.X, wz = hit.Z;
+  if (map_wrap_any()) {                    /* wrap into the base map span */
+    wx = std::fmod(wx, (f32)mw); if (wx < 0) wx += mw;
+    wz = std::fmod(wz, (f32)mh); if (wz < 0) wz += mh;
+  }
+  *out_x = fx((int)std::lround(wx));
+  *out_y = (int)std::lround(wz);
   return 1;
 }
 
 void irrg_map3d_center_on(int tx, int ty)
 {
   if (!built) return;
+  place_camera(tx, ty);
+}
+
+/* Minimap support: the camera's centre in base-map TILE coords (un-mirrored,
+ * wrap-offset removed) + an approximate visible half-extent (tiles). */
+void irrg_map3d_camera_view(int *out_tx, int *out_ty, int *out_half)
+{
+  float wx = cam_target.X - (f32)g_wrap_off_x;
+  float wz = cam_target.Z - (f32)g_wrap_off_y;
+  if (wx < 0) wx += mw; else if (wx >= mw) wx -= mw;   /* wrap into [0,mw) */
+  if (wz < 0) wz += mh; else if (wz >= mh) wz -= mh;
+  *out_tx = fx((int)std::lround(wx));   /* un-mirror world -> tile */
+  *out_ty = (int)std::lround(wz);
+  *out_half = (int)std::lround(g_cam_height * 0.9f);
+}
+
+/* Minimap click-to-jump: recenter the camera on map tile (tx, ty) and reset
+ * the wrap tiling offset back to the base span. */
+void irrg_map3d_goto(int tx, int ty)
+{
+  if (!built) return;
+  g_wrap_off_x = 0; g_wrap_off_y = 0;
+  for (int j = 0; j < 3; ++j)
+    for (int k = 0; k < 3; ++k)
+      if (map_nodes[j][k])
+        map_nodes[j][k]->setPosition(core::vector3df((f32)(k - 1) * mw, 0.0f,
+                                                     (f32)(j - 1) * mh));
   place_camera(tx, ty);
 }
 
@@ -989,15 +1137,47 @@ void irrg_map3d_refocus_current_unit(void)
                         index_to_map_pos_y(tile_index(fu->tile)));
 }
 
-void irrg_map3d_pan(int dx, int dz)
+void irrg_map3d_pan(float dx, float dz)
 {
   if (!built) return;
   g_cam_panned = true;   /* the user is steering the camera; stop auto-framing */
-  cam_pos.X -= (f32)dx;  cam_target.X -= (f32)dx;
-  cam_pos.Z -= (f32)dz;  cam_target.Z -= (f32)dz;
+  cam_pos.X -= dx;  cam_target.X -= dx;
+  cam_pos.Z -= dz;  cam_target.Z -= dz;
   if (camera) {
     camera->setPosition(cam_pos);
     camera->setTarget(cam_target);
+  }
+}
+
+/* Civ4-style edge-hover panning: if the cursor is within `margin` px of a
+ * window edge, slide the map toward that edge (the camera pans the matching
+ * way) so the whole map can be panned without grabbing. The per-frame speed
+ * scales with the camera height so it feels consistent at any zoom. Because the
+ * camera is never clamped to the map bounds, this pans seamlessly across the
+ * map edges when the map wraps (see the 3x3 tiled copies). No-op in the
+ * interior. */
+void irrg_map3d_edge_pan(int win_w, int win_h, int mx, int my)
+{
+  if (!built || !camera || win_w <= 0 || win_h <= 0) return;
+  const int margin = 26;
+  const bool left  = mx < margin;
+  const bool right = mx > win_w - margin;
+  const bool up    = my < margin;
+  const bool down  = my > win_h - margin;
+  if (!left && !right && !up && !down) return;
+  f32 sp = g_cam_height * 0.05f;   /* world units per frame, zoom-scaled */
+  f32 dx = 0.0f, dz = 0.0f;
+  /* camera-right = world +x; screen-down = world +z (see fx() + camera setup). */
+  if (left)  dx -= sp;   /* reveal the east side  -> camera pans right (world +x) */
+  if (right) dx += sp;   /* reveal the west side  -> camera pans left  (world -x) */
+  if (up)    dz -= sp;   /* reveal the south side -> camera pans down  (world +z) */
+  if (down)  dz += sp;   /* reveal the north side -> camera pans up    (world -z) */
+  irrg_map3d_pan(dx, dz);
+  if (std::getenv("FC_IRR_EDGE")) {
+    std::fprintf(stderr, "[irrg] edge(%s%s%s%s) cam=(%.1f,%.1f)\n",
+                 left ? "L" : "", right ? "R" : "", up ? "U" : "", down ? "D" : "",
+                 cam_pos.X, cam_pos.Z);
+    std::fflush(stderr);
   }
 }
 
@@ -1021,8 +1201,9 @@ void irrg_map3d_destroy(void)
 {
   if (!built || !smgr) return;
   if (camera)     { camera->remove();     camera = 0; }
-  if (map_node)   { map_node->remove();   map_node = 0; }
+  remove_map_nodes();
   if (map_parent) { map_parent->remove(); map_parent = 0; }
+  g_wrap_off_x = 0; g_wrap_off_y = 0;
   /* Unit billboards + selection ring (Phase 5b). */
   if (ring_node)   { ring_node->remove();   ring_node = 0; }
   for (std::map<int, UBB>::iterator it = unit_bb.begin(); it != unit_bb.end(); ++it)

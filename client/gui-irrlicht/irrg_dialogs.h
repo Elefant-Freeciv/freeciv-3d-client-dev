@@ -77,4 +77,10 @@ bool irrg_city_dialog_click(int x, int y, bool left);
  * consumed (i.e. do not fall through to the map). */
 bool irrg_panel_click(int x, int y);
 
+/* Minimap (3D, bottom-right): a small colour map of the whole explored map +
+ * a viewport rectangle for the 3D camera. Draw it, then hit-test a click
+ * (on a hit *out_tx/*out_ty = the map tile to jump the camera to). */
+void irrg_draw_minimap(struct canvas *cv);
+int  irrg_minimap_hit(int x, int y, int *out_tx, int *out_ty);
+
 #endif /* IRRG_DIALOGS_H */

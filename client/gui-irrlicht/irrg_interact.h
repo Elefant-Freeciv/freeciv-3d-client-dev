@@ -39,4 +39,8 @@ bool irrg_spawn_test_city(void);
 struct canvas;
 void irrg_mark_units(struct canvas *cv);
 
+/* Last observed cursor position in window pixels (-1,-1 before the first
+ * mouse-move). Used by the Civ4-style edge-hover map panning. */
+void irrg_mouse_get(int *x, int *y);
+
 #endif /* IRG_INTERACT_H */
