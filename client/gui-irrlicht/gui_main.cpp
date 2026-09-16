@@ -1037,9 +1037,27 @@ int irrg_ui_main(int argc, char *argv[])
       }
     }
 
-    if ((++frames % 300) == 0)
-      irrg_log((std::string("event loop alive: frames=") + std::to_string(frames)
-                + " netsock=" + std::to_string(net_socket)).c_str());
+    if ((++frames % 300) == 0) {
+      const int st = (int)client_state();
+      std::string hb = std::string("event loop alive: frames=") + std::to_string(frames)
+        + " netsock=" + std::to_string(net_socket)
+        + " state=" + std::to_string(st)
+        + " map=" + std::to_string(wld.map.xsize) + "x" + std::to_string(wld.map.ysize)
+        + " map_init=" + (map_initialized ? "1" : "0")
+        + " 3d=" + (map3d ? "1" : "0")
+        + " built=" + (irrg_map3d_is_built() ? "1" : "0");
+      /* Self-diagnosis: if 3D is wanted but not up, say WHY (so a stuck
+       * client is explainable from a single log line). */
+      if (map3d && !irrg_map3d_is_built()) {
+        if (st < 3)
+          hb += "   <- 3D idle: not in a running game yet (state<3) -- no map to build";
+        else if (wld.map.xsize <= 0 || wld.map.ysize <= 0)
+          hb += "   <- 3D idle: map size not received yet";
+        else
+          hb += "   <- 3D idle: terrain not built (look for the 'no tiles rendered ... art=' line)";
+      }
+      irrg_log(hb.c_str());
+    }
   }
   irrg_log("ui_main: event loop exited.");
   return 0;
