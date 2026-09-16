@@ -35,7 +35,7 @@
 struct functions fc_functions;
 
 /* The functions are accessed via this pointer. */
-const struct functions *fc_funcs = NULL;
+const struct functions *fc_funcs = nullptr;
 /* After this is set to TRUE (in interface_init()), the functions are
    available via fc_funcs. */
 bool fc_funcs_defined = FALSE;
@@ -77,6 +77,7 @@ void libfreeciv_init(bool check_fc_interface)
   fc_astr_init();
   fc_support_init();
   init_nls();
+  requirements_init();
 
   if (check_fc_interface) {
     fc_funcs = &fc_functions;
@@ -108,6 +109,7 @@ void libfreeciv_free(void)
   free_user_home_dir();
   free_fileinfo_data();
   netfile_free();
+  requirements_free();
   free_nls();
   fc_iconv_close();
   fc_support_free();

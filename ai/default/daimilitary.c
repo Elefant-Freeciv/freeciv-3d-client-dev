@@ -96,7 +96,7 @@ struct unit_type *dai_choose_defender_versus(struct city *pcity,
   struct civ_map *nmap = &(wld.map);
 
   simple_ai_unit_type_iterate(punittype) {
-    if (can_city_build_unit_now(nmap, pcity, punittype)) {
+    if (can_city_build_unit_now(nmap, pcity, punittype, RPT_CERTAIN)) {
       int fpatt, fpdef, defense, attack;
       double want, loss, cost = utype_build_shield_cost(pcity, NULL, punittype);
       struct unit *defender;
@@ -161,7 +161,7 @@ static struct unit_type *dai_choose_attacker(struct ai_type *ait,
     if ((tc == TC_LAND && utype_class(putype)->adv.land_move != MOVE_NONE)
         || (tc == TC_OCEAN
             && utype_class(putype)->adv.sea_move != MOVE_NONE)) {
-      if (can_city_build_unit_now(nmap, pcity, putype)
+      if (can_city_build_unit_now(nmap, pcity, putype, RPT_CERTAIN)
           && (cur > best
               || (ADV_WANTS_EQ(cur, best)
                   && utype_build_shield_cost(pcity, NULL, putype)
@@ -215,7 +215,7 @@ static struct unit_type *dai_choose_bodyguard(struct ai_type *ait,
     }
 
     /* Now find best */
-    if (can_city_build_unit_now(nmap, pcity, putype)) {
+    if (can_city_build_unit_now(nmap, pcity, putype, RPT_CERTAIN)) {
       const adv_want desire = dai_unit_defense_desirability(ait, putype);
 
       if (desire > best
@@ -464,6 +464,7 @@ tactical_req_cb(const struct req_context *context,
   case VUT_TERRAIN:
   case VUT_EXTRA:
   case VUT_TILEDEF:
+  case VUT_TILEDEF_CONNECTED:
   case VUT_GOOD:
   case VUT_TERRAINCLASS:
   case VUT_TERRFLAG:
@@ -1117,7 +1118,7 @@ bool dai_process_defender_want(struct ai_type *ait, const struct civ_map *nmap,
       desire /= POWER_DIVIDER / 2; /* Good enough, no rounding errors. */
       desire *= desire;
 
-      if (can_city_build_unit_now(nmap, pcity, punittype)) {
+      if (can_city_build_unit_now(nmap, pcity, punittype, RPT_CERTAIN)) {
         /* We can build the unit now... */
 
         int build_cost = utype_build_shield_cost(pcity, NULL, punittype);
@@ -1292,7 +1293,8 @@ static void process_attacker_want(struct ai_type *ait,
     if (dai_can_unit_type_follow_unit_type(punittype, orig_utype, ait)
         && is_native_near_tile(&(wld.map), utype_class(punittype), ptile)
         && (U_NOT_OBSOLETED == punittype->obsoleted_by
-            || !can_city_build_unit_direct(nmap, pcity, punittype->obsoleted_by))
+            || !can_city_build_unit_direct(nmap, pcity, punittype->obsoleted_by,
+                                           RPT_CERTAIN))
         && punittype->attack_strength > 0 /* Or we'll get SIGFPE */) {
       /* Values to be computed */
       adv_want desire;
@@ -1309,6 +1311,8 @@ static void process_attacker_want(struct ai_type *ait,
                                    },
                                    NULL,
                                    EFT_VETERAN_BUILD);
+      /* Levels start from zero, so max level is 'number of levels - 1' */
+      int max_level = utype_veteran_levels(punittype) - 1;
       /* Cost (shield equivalent) of gaining these techs. */
       /* FIXME? Katvrr advises that this should be weighted more heavily in big
        * danger. */
@@ -1316,10 +1320,12 @@ static void process_attacker_want(struct ai_type *ait,
       int bcost_balanced = build_cost_balanced(punittype);
       /* See description of kill_desire() for info about this variables. */
       int bcost = utype_build_shield_cost(pcity, NULL, punittype);
-      int attack = adv_unittype_att_rating(punittype, veteran_level,
-                                           SINGLE_MOVE,
-                                           punittype->hp);
+      int attack;
       int tech_dist = 0;
+
+      veteran_level = CLIP(0, veteran_level, max_level);
+      attack = adv_unittype_att_rating(punittype, veteran_level,
+                                       SINGLE_MOVE, punittype->hp);
 
       unit_tech_reqs_iterate(punittype, padv) {
         Tech_type_id tech_req = advance_number(padv);
@@ -1467,7 +1473,7 @@ static void process_attacker_want(struct ai_type *ait,
         } else if (want > best_choice->want) {
           const struct impr_type *impr_req;
 
-          if (can_city_build_unit_now(nmap, pcity, punittype)) {
+          if (can_city_build_unit_now(nmap, pcity, punittype, RPT_CERTAIN)) {
             /* This is a real unit and we really want it */
 
             CITY_LOG(LOG_DEBUG, pcity, "overriding %s(" ADV_WANT_PRINTF
@@ -1487,7 +1493,8 @@ static void process_attacker_want(struct ai_type *ait,
                                                            pcity)))) {
             CITY_LOG(LOG_DEBUG, pcity, "cannot build unit %s",
                      utype_rule_name(punittype));
-          } else if (can_city_build_improvement_now(pcity, impr_req)) {
+          } else if (can_city_build_improvement_now(pcity, impr_req,
+                                                    RPT_CERTAIN)) {
             /* Building this unit requires a specific type of improvement.
              * So we build this improvement instead.  This may not be the
              * best behavior. */
@@ -1897,7 +1904,7 @@ struct adv_choice *military_advisor_choose_build(struct ai_type *ait,
 
       if (wall_id != B_LAST
           && pcity->server.adv->building_want[wall_id] != 0 && our_def != 0
-          && can_city_build_improvement_now(pcity, pimprove)
+          && can_city_build_improvement_now(pcity, pimprove, RPT_CERTAIN)
           && (danger < 101 || num_defenders > 1
               || (city_data->grave_danger == 0
                   && pplayer->economic.gold

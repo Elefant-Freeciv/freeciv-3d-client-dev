@@ -116,16 +116,9 @@ enum usdlg_cmd {
 
 struct unit_select_dialog {
   struct tile *ptile;
-  int unit_id_focus;
 
   GtkWidget *shell;
   GtkWidget *notebook;
-
-  struct {
-    GtkTreeStore *store;
-    GtkWidget *view;
-    GtkTreePath *path;
-  } units;
 
   struct {
     GtkTreeStore *store;
@@ -417,6 +410,7 @@ static void usdlg_tab_select(struct unit_select_dialog *pdialog,
   view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
   gtk_widget_set_hexpand(view, TRUE);
   gtk_widget_set_vexpand(view, TRUE);
+  gtk_widget_add_css_class(GTK_WIDGET(view), "large-pixbufs");
   pdialog->tabs[loc].view = view;
   g_object_unref(store);
 
@@ -1179,7 +1173,11 @@ static void usdlg_cmd_focus_real(GtkTreeView *view)
 
     punit = player_unit_by_number(client_player(), uid);
     if (punit && unit_owner(punit) == client_player()) {
-      unit_focus_set(punit);
+      /* FIXME: If unit is not idle to begin with, we can only request
+       *        idling, and as we have no server reply yet,
+       *        the unit_focus_try() below will fail. */
+      request_new_unit_activity(punit, ACTIVITY_IDLE);
+      unit_focus_try(punit);
       usdlg_destroy();
     }
   }

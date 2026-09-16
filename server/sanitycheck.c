@@ -20,6 +20,7 @@
 #include "log.h"
 
 /* common */
+#include "ai.h"
 #include "city.h"
 #include "game.h"
 #include "government.h"
@@ -447,6 +448,11 @@ static void check_units(const char *file, const char *function, int line)
         SANITY_CHECK(punit->activity_target != NULL);
       }
 
+      if (punit->activity == ACTIVITY_GOTO) {
+        /* ACTIVITY_GOTO requires goto_tile always to be set. */
+        SANITY_CHECK(punit->goto_tile != NULL);
+      }
+
       pcity = tile_city(ptile);
       if (pcity) {
 	SANITY_CHECK(pplayers_allied(city_owner(pcity), pplayer));
@@ -684,6 +690,10 @@ void real_sanity_check(const char *file, const char *function, int line)
   check_teams(file, function, line);
   check_researches(file, function, line);
   check_connections(file, function, line);
+
+  players_iterate(pplayer) {
+    CALL_PLR_AI_FUNC(check_sanity, pplayer, pplayer);
+  } players_iterate_end;
 }
 
 /**********************************************************************//**

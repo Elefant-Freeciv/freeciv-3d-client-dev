@@ -4,12 +4,12 @@
 # This translation is covered by the GNU General Public License Version 2.
 # Copyright (C) 1999-2004
 #
-# Past translators:    Andreas Røsdal <andrearo@stud.ntnu.no>, 2002-2004
-#                      Stig E Sandø <stig@ii.uib.no>, 1999-2001
+# Past translators:    Andreas RÃ¸sdal <andrearo@stud.ntnu.no>, 2002-2004
+#                      Stig E SandÃ¸ <stig@ii.uib.no>, 1999-2001
 #
 # Feedback and patches provided by:
 #  - Per I. Mathisen <per@freeciv.org>
-#  - Jørgen Skjaanes <jorgen@gulesider.no>
+#  - JÃ¸rgen Skjaanes <jorgen@gulesider.no>
 #  - Gaute (B) Strokkenes <gs234@cam.ac.uk>
 #  - Petter Reinholdtsen <pere@hungry.com>
 #  - Knut Omang <komang@broadpark.no>
@@ -20,12 +20,12 @@ msgstr ""
 "Project-Id-Version: 2.0.0\n"
 "Report-Msgid-Bugs-To: https://redmine.freeciv.org/projects/freeciv\n"
 "POT-Creation-Date: 2025-01-16 22:18+0200\n"
-"PO-Revision-Date: 2013-09-12 07:21+0300\n"
+"PO-Revision-Date: 2026-07-25 18:10+0300\n"
 "Last-Translator: Per I. Mathisen <per@freeciv.org>\n"
 "Language-Team: Norwegian <andrearo@stud.ntnu.no>\n"
 "Language: nb\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=ISO-8859-1\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1\n"
 "X-Generator: KBabel 1.0\n"
@@ -447,7 +447,7 @@ msgstr ""
 #: tools/ruledit/ruledit_qt.cpp:255
 #, fuzzy
 msgid "Ruleset loaded"
-msgstr "Ørken"
+msgstr "Ã˜rken"
 
 #: tools/ruledit/ruledit_qt.cpp:279
 msgid "Ruleset loading failed!"
@@ -668,7 +668,7 @@ msgstr ""
 #: tools/ruledit/tab_misc.cpp:74
 #, fuzzy
 msgid "Ruleset name"
-msgstr "Ørken"
+msgstr "Ã˜rken"
 
 #: tools/ruledit/tab_misc.cpp:79
 #, fuzzy
@@ -814,7 +814,7 @@ msgstr ""
 #: tools/ruledit/tab_misc.cpp:317
 #, fuzzy
 msgid "Ruleset saved"
-msgstr "Ørken"
+msgstr "Ã˜rken"
 
 #: tools/ruledit/tab_misc.cpp:468
 msgid "Always active"

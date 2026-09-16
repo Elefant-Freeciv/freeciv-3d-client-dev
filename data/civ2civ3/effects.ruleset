@@ -195,6 +195,7 @@ value   = 10
 reqs    =
     { "type", "name", "range", "present"
       "NationGroup", "Barbarian", "Player", TRUE
+      "Nation", "Animal Kingdom", "Player", FALSE
       "Age", "5", "Local", TRUE
       "CityTile", "Center", "Tile", FALSE
     }
@@ -745,17 +746,9 @@ reqs    =
 type    = "Shield2Gold_Pct"
 value   = 100
 reqs    =
-    { "type",         "name",            "range", "present"
-      "UnitTypeFlag", "ShieldToGold",     "Local", TRUE
-      "Gov", "Anarchy", "Player", FALSE
-      "Gov", "Tribal", "Player", FALSE
-      "Gov", "Communism", "Player", FALSE
-;      "Gov", "Despotism", "Player", FALSE
-;      "Gov", "Monarchy", "Player", FALSE
-;      "Gov", "Fundamentalism", "Player", FALSE
-;      "Gov", "Federation", "Player", FALSE
-      "Gov", "Republic", "Player", FALSE
-;      "Gov", "Democracy", "Player", FALSE
+    { "type",         "name",         "range"
+      "UnitTypeFlag", "ShieldToGold", "Local"
+      "GovFlag",      "ShieldToGold", "Player"
     }
 
 [effect_base_unit_upkeep_gold_1]
@@ -3809,8 +3802,8 @@ type    = "Tech_Upkeep_Free"
 value   = 3
 
 [effect_tech_cost_base]
-type    = "Tech_Cost_Factor"
-value   = 3
+type    = "Tech_Cost_Pct"
+value   = 300
 
 [effect_tech_leakage]
 type    = "Tech_Leakage"

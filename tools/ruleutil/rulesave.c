@@ -1848,7 +1848,7 @@ static bool save_game_ruleset(const char *filename, const char *name)
 
     if (pcounter->helptext != nullptr
         && strvec_size(pcounter->helptext) > 0) {
-      save_strvec(sfile, pcounter->helptext, "%s.helptext", path);
+      save_strvec(sfile, pcounter->helptext, path, "helptext");
     }
   } counters_re_iterate_end;
 
@@ -1933,13 +1933,13 @@ static bool save_governments_ruleset(const char *filename, const char *name)
         uflags_government = TRUE;
       }
 
-      secfile_insert_str(sfile, flagname, "control.government_flags%d.name", i);
+      secfile_insert_str(sfile, flagname, "control.flags%d.name", i);
 
       /* Save the user flag help text even when it is undefined. That makes
        * the formatting code happy. The resulting "" is ignored when the
        * ruleset is loaded. */
       secfile_insert_str(sfile, helptxt,
-                         "control.government_flags%d.helptxt", i);
+                         "control.flags%d.helptxt", i);
     }
   }
 
@@ -3036,6 +3036,8 @@ static bool save_terrain_ruleset(const char *filename, const char *name)
       secfile_insert_str(sfile, extra_rule_name(pextra),
                          "%s.extra", path);
 
+      save_reqs_vector(sfile, &(proad->first_reqs), path, "first_reqs");
+
       secfile_insert_int(sfile, proad->move_cost, "%s.move_cost", path);
 
       if (proad->move_mode != RMM_FAST_ALWAYS) {
@@ -3087,10 +3089,26 @@ static bool save_terrain_ruleset(const char *filename, const char *name)
         secfile_insert_str_vec(sfile, flag_names, set_count,
                                "%s.flags", path);
       }
+
+      if (extra_type_list_size(proad->integrators) > 0) {
+        const char *integrate_names[extra_type_list_size(proad->integrators)];
+
+        set_count = 0;
+        extra_type_list_iterate(proad->integrators, iextra) {
+          if (iextra != pextra) {
+            integrate_names[set_count++] = extra_rule_name(iextra);
+          }
+        } extra_type_list_iterate_end;
+
+        if (set_count > 0) {
+          secfile_insert_str_vec(sfile, integrate_names, set_count,
+                                 "%s.integrates", path);
+        }
+      }
     }
   } extra_type_by_cause_iterate_end;
 
-  // comment_tiledefs(sfile);
+  comment_tiledefs(sfile);
 
   sect_idx = 0;
   tiledef_iterate(td) {

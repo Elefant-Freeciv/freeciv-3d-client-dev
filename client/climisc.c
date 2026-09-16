@@ -180,7 +180,7 @@ void client_change_all(struct universal *from, struct universal *to)
   connection_do_buffer(&client.conn);
   city_list_iterate (client.conn.playing->cities, pcity) {
     if (are_universals_equal(&pcity->production, from)
-        && can_city_build_now(&(wld.map), pcity, to)) {
+        && can_city_build_now(&(wld.map), pcity, to, RPT_CERTAIN)) {
       city_change_production(pcity, to);
     }
   } city_list_iterate_end;
@@ -593,7 +593,7 @@ bool city_building_present(const struct city *pcity,
 bool can_city_build_now_client(const struct city *pcity,
                                const struct universal *target)
 {
-  return can_city_build_now(&(wld.map), pcity, target);
+  return can_city_build_now(&(wld.map), pcity, target, RPT_CERTAIN);
 }
 
 /**********************************************************************//**
@@ -794,7 +794,8 @@ int collect_buildable_targets(struct universal *targets)
   }
 
   improvement_iterate(pimprove) {
-    if (can_player_build_improvement_now(client.conn.playing, pimprove)) {
+    if (can_player_build_improvement_now(client.conn.playing, pimprove,
+                                         RPT_CERTAIN)) {
       targets[cids_used].kind = VUT_IMPROVEMENT;
       targets[cids_used].value.building = pimprove;
       cids_used++;
@@ -802,7 +803,8 @@ int collect_buildable_targets(struct universal *targets)
   } improvement_iterate_end;
 
   unit_type_iterate(punittype) {
-    if (can_player_build_unit_now(client.conn.playing, punittype)) {
+    if (can_player_build_unit_now(client.conn.playing, punittype,
+                                  RPT_CERTAIN)) {
       targets[cids_used].kind = VUT_UTYPE;
       targets[cids_used].value.utype = punittype;
       cids_used++;
@@ -830,19 +832,22 @@ int collect_eventually_buildable_targets(struct universal *targets,
 
     if (NULL != pcity) {
       /* Can the city build? */
-      can_build = can_city_build_improvement_now(pcity, pimprove);
+      can_build = can_city_build_improvement_now(pcity, pimprove,
+                                                 RPT_CERTAIN);
       can_eventually_build = can_city_build_improvement_later(pcity,
                                                               pimprove);
     } else if (NULL != pplayer) {
       /* Can our player build? */
-      can_build = can_player_build_improvement_now(pplayer, pimprove);
+      can_build = can_player_build_improvement_now(pplayer, pimprove,
+                                                   RPT_CERTAIN);
       can_eventually_build = can_player_build_improvement_later(pplayer,
                                                                 pimprove);
     } else {
       /* Global observer case: can any player build? */
       can_build = FALSE;
       players_iterate(aplayer) {
-        if (can_player_build_improvement_now(aplayer, pimprove)) {
+        if (can_player_build_improvement_now(aplayer, pimprove,
+                                             RPT_CERTAIN)) {
           can_build = TRUE;
           break;
         }
@@ -871,17 +876,17 @@ int collect_eventually_buildable_targets(struct universal *targets,
 
     if (NULL != pcity) {
       /* Can the city build? */
-      can_build = can_city_build_unit_now(nmap, pcity, punittype);
+      can_build = can_city_build_unit_now(nmap, pcity, punittype, RPT_CERTAIN);
       can_eventually_build = can_city_build_unit_later(nmap, pcity, punittype);
     } else if (NULL != pplayer) {
       /* Can our player build? */
-      can_build = can_player_build_unit_now(pplayer, punittype);
+      can_build = can_player_build_unit_now(pplayer, punittype, RPT_CERTAIN);
       can_eventually_build = can_player_build_unit_later(pplayer, punittype);
     } else {
       /* Global observer case: can any player build? */
       can_build = FALSE;
       players_iterate(aplayer) {
-        if (can_player_build_unit_now(aplayer, punittype)) {
+        if (can_player_build_unit_now(aplayer, punittype, RPT_CERTAIN)) {
           can_build = TRUE;
           break;
         }

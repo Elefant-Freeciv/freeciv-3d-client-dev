@@ -725,15 +725,24 @@ bool is_safe_ocean(const struct civ_map *nmap, const struct tile *ptile)
   This function returns true if the tile at the given location can be
   "reclaimed" from ocean into land. This is the case only when there are
   a sufficient number of adjacent tiles that are not ocean.
+
+  The obvious way to do this would be like in can_channel_land() below -
+    int land_tiles = count_terrain_class_near_tile(nmap, ptile,
+                                                 FALSE, TRUE, TC_LAND);
+  But we want to count Inaccessible and "off-the-map" tiles as land tiles,
+  so do things differently. Need some extra float calculations to fix bug.
+  See RM #1278.
 ***********************************************************************/
 bool can_reclaim_ocean(const struct civ_map *nmap,
                        const struct tile *ptile)
 {
-  int land_tiles = 100 - count_terrain_class_near_tile(nmap, ptile,
-                                                       FALSE, TRUE,
-                                                       TC_OCEAN);
+  int num_surrounding_tiles = MAP_NUM_VALID_DIRS;
+  float pct = terrain_control.ocean_reclaim_requirement_pct/100.0;
+  int land_tiles = num_surrounding_tiles -
+                   count_terrain_class_near_tile(nmap, ptile,
+                                                 FALSE, FALSE, TC_OCEAN);
 
-  return land_tiles >= terrain_control.ocean_reclaim_requirement_pct;
+  return land_tiles >= ceil(pct * num_surrounding_tiles);
 }
 
 /*******************************************************************//**
@@ -1071,7 +1080,7 @@ bool is_tiles_adjacent(const struct tile *tile0, const struct tile *tile1)
 
 /*******************************************************************//**
   Are (x1, y1) and (x2, y2) really the same when adjusted?
-  This function might be necessary ALOT of places...
+  This function might be necessary in a lot of places...
 ***********************************************************************/
 bool same_pos(const struct tile *tile1, const struct tile *tile2)
 {

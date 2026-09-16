@@ -56,7 +56,7 @@ static const char *cr_entry_cityname(const struct city *pcity,
   /* We used to truncate the name to 14 bytes.  This should not be needed
    * in any modern GUI library and may give an invalid string if a
    * multibyte character is clipped. */
-  return city_name_get(pcity);
+  return city_name_getx(pcity);
 }
 
 /********************************************************************//**
@@ -817,8 +817,8 @@ static const struct city_report_spec base_city_report_specs[] = {
     NULL, FUNC_TAG(performance) },
   { FALSE,   3, NULL, N_("?Continent:C"), N_("Continent number"),
     NULL, FUNC_TAG(continent) },
-  { FALSE,   1, N_("?number_trade_routes:n"),
-    N_("?number_trade_routes:R"),
+  { FALSE,   6, N_("?number_trade_routes:Trade"),
+    N_("?number_trade_routes:Routes"),
     N_("Number (and total value) of trade routes"),
     NULL, FUNC_TAG(trade_routes) },
   { FALSE,   3, NULL, N_("?pollution [short]:Pol"), N_("?stats:Pollution"),

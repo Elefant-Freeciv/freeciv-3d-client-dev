@@ -14,6 +14,7 @@
 #include <limits.h>
 #include <math.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #include "lua.h"
 
@@ -663,11 +664,11 @@ static int boolT (FuncState *fs) {
 ** Add nil to list of constants and return its index.
 */
 static int nilK (FuncState *fs) {
-  TValue k, v;
-  setnilvalue(&v);
+  lua_State *L = fs->ls->L;
+  TValue k;
   /* cannot use nil as key; instead use table itself */
-  sethvalue(fs->ls->L, &k, fs->kcache);
-  return k2proto(fs, &k, &v);
+  sethvalue(L, &k, fs->kcache);
+  return k2proto(fs, &k, &G(L)->nilvalue);
 }
 
 
@@ -806,7 +807,7 @@ void luaK_setoneret (FuncState *fs, expdesc *e) {
 ** Change a vararg parameter into a regular local variable
 */
 void luaK_vapar2local (FuncState *fs, expdesc *var) {
-  fs->f->flag |= PF_VATAB;  /* function will need a vararg table */
+  needvatab(fs->f);  /* function will need a vararg table */
   /* now a vararg parameter is equivalent to a regular local variable */
   var->k = VLOCAL;
 }
@@ -827,7 +828,7 @@ void luaK_dischargevars (FuncState *fs, expdesc *e) {
     }  /* FALLTHROUGH */
     case VLOCAL: {  /* already in a register */
       int temp = e->u.var.ridx;
-      e->u.info = temp;  /* (can't do a direct assignment; values overlap) */
+      e->u.info = temp;  /* (avoid a direct assignment; values overlap) */
       e->k = VNONRELOC;  /* becomes a non-relocatable value */
       break;
     }
@@ -1127,7 +1128,7 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
       break;
     }
     case VVARGIND: {
-      fs->f->flag |= PF_VATAB;  /* function will need a vararg table */
+      needvatab(fs->f);  /* function will need a vararg table */
       /* now, assignment is to a regular table */
     }  /* FALLTHROUGH */
     case VINDEXED: {
@@ -1365,18 +1366,21 @@ void luaK_indexed (FuncState *fs, expdesc *t, expdesc *k) {
     luaK_exp2anyreg(fs, t);  /* put it in a register */
   if (t->k == VUPVAL) {
     lu_byte temp = cast_byte(t->u.info);  /* upvalue index */
-    t->u.ind.t = temp;  /* (can't do a direct assignment; values overlap) */
+    t->u.ind.t = temp;  /* (avoid a direct assignment; values overlap) */
     lua_assert(isKstr(fs, k));
     fillidxk(t, k->u.info, VINDEXUP);  /* literal short string */
   }
   else if (t->k == VVARGVAR) {  /* indexing the vararg parameter? */
-    lua_assert(t->u.ind.t == fs->f->numparams);
-    t->u.ind.t = cast_byte(t->u.var.ridx);
-    fillidxk(t, luaK_exp2anyreg(fs, k), VVARGIND);  /* register */
+    int kreg = luaK_exp2anyreg(fs, k);  /* put key in some register */
+    lu_byte vreg = cast_byte(t->u.var.ridx);  /* register with vararg param. */
+    lua_assert(vreg == fs->f->numparams);
+    t->u.ind.t = vreg;  /* (avoid a direct assignment; values may overlap?) */
+    fillidxk(t, kreg, VVARGIND);  /* 't' represents 'vararg[k]' */
   }
   else {
     /* register index of the table */
-    t->u.ind.t = cast_byte((t->k == VLOCAL) ? t->u.var.ridx: t->u.info);
+    lu_byte temp = cast_byte((t->k == VLOCAL) ? t->u.var.ridx: t->u.info);
+    t->u.ind.t = temp;  /* (avoid a direct assignment; values may overlap?) */
     if (isKstr(fs, k))
       fillidxk(t, k->u.info, VINDEXSTR);  /* literal short string */
     else if (isCint(k))  /* int. constant in proper range? */
@@ -1927,14 +1931,14 @@ static int finaltarget (Instruction *code, int i) {
 void luaK_finish (FuncState *fs) {
   int i;
   Proto *p = fs->f;
+  if (p->flag & PF_VATAB)  /* will it use a vararg table? */
+    p->flag &= cast_byte(~PF_VAHID);  /* then it will not use hidden args. */
   for (i = 0; i < fs->pc; i++) {
     Instruction *pc = &p->code[i];
-    /* avoid "not used" warnings when assert is off (for 'onelua.c') */
-    (void)luaP_isOT; (void)luaP_isIT;
     lua_assert(i == 0 || luaP_isOT(*(pc - 1)) == luaP_isIT(*pc));
     switch (GET_OPCODE(*pc)) {
       case OP_RETURN0: case OP_RETURN1: {
-        if (!(fs->needclose || (p->flag & PF_ISVARARG)))
+        if (!(fs->needclose || (p->flag & PF_VAHID)))
           break;  /* no extra work */
         /* else use OP_RETURN to do the extra work */
         SET_OPCODE(*pc, OP_RETURN);
@@ -1942,13 +1946,18 @@ void luaK_finish (FuncState *fs) {
       case OP_RETURN: case OP_TAILCALL: {
         if (fs->needclose)
           SETARG_k(*pc, 1);  /* signal that it needs to close */
-        if (p->flag & PF_ISVARARG)
-          SETARG_C(*pc, p->numparams + 1);  /* signal that it is vararg */
+        if (p->flag & PF_VAHID)  /* does it use hidden arguments? */
+          SETARG_C(*pc, p->numparams + 1);  /* signal that */
         break;
       }
       case OP_GETVARG: {
         if (p->flag & PF_VATAB)  /* function has a vararg table? */
           SET_OPCODE(*pc, OP_GETTABLE);  /* must get vararg there */
+        break;
+      }
+      case OP_VARARG: {
+        if (p->flag & PF_VATAB)  /* function has a vararg table? */
+          SETARG_k(*pc, 1);  /* must get vararg there */
         break;
       }
       case OP_JMP: {  /* to optimize jumps to jumps */

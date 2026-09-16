@@ -15,7 +15,7 @@
 #include <fc_config.h>
 #endif
 
-#ifdef AUDIO_SDL
+#ifdef AUDIO_SDL2
 /* Though it would happily compile without this include,
  * it is needed for sound to work.
  * It defines "main" macro to rename our main() so that
@@ -25,7 +25,7 @@
 #else  /* PLAIN_INCLUDE */
 #include <SDL2/SDL.h>
 #endif /* PLAIN_INCLUDE */
-#endif /* AUDIO_SDL */
+#endif /* AUDIO_SDL2 */
 
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
@@ -129,7 +129,6 @@ GtkWidget *toplevel_tabs;
 GtkWidget *top_vbox;
 GtkWidget *top_notebook, *bottom_notebook, *right_notebook;
 GtkWidget *map_widget;
-static GtkWidget *bottom_hpaned;
 
 PangoFontDescription *city_names_style = NULL;
 PangoFontDescription *city_productions_style = NULL;
@@ -320,12 +319,12 @@ static gboolean toplevel_focus(GtkWidget *w, GtkDirectionType arg)
     case GTK_DIR_TAB_BACKWARD:
 
       if (!gtk_widget_get_can_focus(w)) {
-	return FALSE;
+        return FALSE;
       }
 
       if (!gtk_widget_is_focus(w)) {
-	gtk_widget_grab_focus(w);
-	return TRUE;
+        gtk_widget_grab_focus(w);
+        return TRUE;
       }
       break;
 
@@ -385,8 +384,8 @@ static gboolean toplevel_handler(GtkWidget *w, GdkEvent *ev, gpointer data)
             && gtk_text_view_get_editable(GTK_TEXT_VIEW(focus)))) {
       /* Propagate event to currently focused entry widget. */
       if (gtk_widget_event(focus, ev)) {
-	/* Do not propagate event to our children. */
-	return TRUE;
+        /* Do not propagate event to our children. */
+        return TRUE;
       }
     }
   }
@@ -426,12 +425,12 @@ static gboolean key_press_map_canvas(GtkWidget *w, GdkEventKey *ev,
 
     case GDK_KEY_Page_Up:
       g_signal_emit_by_name(main_message_area, "move_cursor",
-	                          GTK_MOVEMENT_PAGES, -1, FALSE);
+                            GTK_MOVEMENT_PAGES, -1, FALSE);
       return TRUE;
 
     case GDK_KEY_Page_Down:
       g_signal_emit_by_name(main_message_area, "move_cursor",
-	                          GTK_MOVEMENT_PAGES, 1, FALSE);
+                            GTK_MOVEMENT_PAGES, 1, FALSE);
       return TRUE;
 
     default:
@@ -444,41 +443,12 @@ static gboolean key_press_map_canvas(GtkWidget *w, GdkEventKey *ev,
     }
   }
 
-  if (ev->state & GDK_SHIFT_MASK) {
-    bool volchange = FALSE;
-
-    switch (ev->keyval) {
-    case GDK_KEY_KP_Add:
-      gui_options.sound_effects_volume += 10;
-      volchange = TRUE;
-      break;
-
-    case GDK_KEY_KP_Subtract:
-      gui_options.sound_effects_volume -= 10;
-      volchange = TRUE;
-      break;
-
-    default:
-      break;
-    }
-
-    if (volchange) {
-      struct option *poption = optset_option_by_name(client_optset, "sound_effects_volume");
-
-      gui_options.sound_effects_volume = CLIP(0, gui_options.sound_effects_volume, 100);
-      option_changed(poption);
-
-      return TRUE;
-    }
-  }
   if (!(ev->state & ACCL_MOD_KEY)) {
     switch (ev->keyval) {
-    case GDK_KEY_plus:
     case GDK_KEY_KP_Add:
       zoom_step_up();
       return TRUE;
 
-    case GDK_KEY_minus:
     case GDK_KEY_KP_Subtract:
       zoom_step_down();
       return TRUE;
@@ -803,7 +773,7 @@ static void tearoff_callback(GtkWidget *b, gpointer data)
     gtk_window_set_position(GTK_WINDOW(w), GTK_WIN_POS_MOUSE);
     g_signal_connect(w, "destroy", G_CALLBACK(tearoff_destroy), box);
     g_signal_connect(w, "key_press_event",
-	G_CALLBACK(propagate_keypress), NULL);
+                     G_CALLBACK(propagate_keypress), NULL);
 
     g_object_set_data(G_OBJECT(w), "parent", gtk_widget_get_parent(box));
     g_object_set_data(G_OBJECT(w), "toggle", b);
@@ -1033,7 +1003,7 @@ void reset_unit_table(void)
   /* We have to force a redraw of the units.  And we explicitly have
    * to force a redraw of the focus unit, which is normally only
    * redrawn when the focus changes. We also have to force the 'more'
-   * arrow to go away, both by expicitly hiding it and telling it to
+   * arrow to go away, both by explicitly hiding it and telling it to
    * do so (this will be reset immediately afterwards if necessary,
    * but we have to make the *internal* state consistent). */
   gtk_widget_hide(more_arrow_pixmap_button);
@@ -1241,28 +1211,28 @@ static void setup_widgets(void)
   gtk_widget_set_halign(overview_canvas, GTK_ALIGN_CENTER);
   gtk_widget_set_valign(overview_canvas, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(overview_canvas, overview_canvas_store_width,
-		              overview_canvas_store_height);
+                              overview_canvas_store_height);
   gtk_widget_set_size_request(overview_scrolled_window, overview_canvas_store_width,
-		              overview_canvas_store_height);
+                              overview_canvas_store_height);
   gtk_widget_set_hexpand(overview_canvas, TRUE);
   gtk_widget_set_vexpand(overview_canvas, TRUE);
 
   gtk_widget_add_events(overview_canvas, GDK_EXPOSURE_MASK
-        			        |GDK_BUTTON_PRESS_MASK
-				        |GDK_POINTER_MOTION_MASK);
+                                         |GDK_BUTTON_PRESS_MASK
+                                         |GDK_POINTER_MOTION_MASK);
   gtk_container_add(GTK_CONTAINER(avbox), overview_scrolled_window);
 
   gtk_container_add(GTK_CONTAINER(overview_scrolled_window),
                     overview_canvas);
 
   g_signal_connect(overview_canvas, "draw",
-        	   G_CALLBACK(overview_canvas_draw), NULL);
+                   G_CALLBACK(overview_canvas_draw), NULL);
 
   g_signal_connect(overview_canvas, "motion_notify_event",
-        	   G_CALLBACK(move_overviewcanvas), NULL);
+                   G_CALLBACK(move_overviewcanvas), NULL);
 
   g_signal_connect(overview_canvas, "button_press_event",
-        	   G_CALLBACK(butt_down_overviewcanvas), NULL);
+                   G_CALLBACK(butt_down_overviewcanvas), NULL);
 
   /* The rest */
 
@@ -1563,7 +1533,6 @@ static void setup_widgets(void)
   /* *** The message window -- this is a detachable widget *** */
 
   if (GUI_GTK_OPTION(message_chat_location) == GUI_GTK_MSGCHAT_MERGED) {
-    bottom_hpaned = paned;
     right_notebook = bottom_notebook = top_notebook;
   } else {
     GtkWidget *hpaned;
@@ -1587,7 +1556,6 @@ static void setup_widgets(void)
     }
     gtk_container_add(GTK_CONTAINER(vgrid), hpaned);
     g_object_set(hpaned, "margin", 4, NULL);
-    bottom_hpaned = hpaned;
 
     bottom_notebook = gtk_notebook_new();
     gtk_notebook_set_tab_pos(GTK_NOTEBOOK(bottom_notebook), GTK_POS_TOP);
@@ -1611,9 +1579,9 @@ static void setup_widgets(void)
 
   sw = gtk_scrolled_window_new(NULL, NULL);
   gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(sw),
-				      GTK_SHADOW_ETCHED_IN);
+                                      GTK_SHADOW_ETCHED_IN);
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw), GTK_POLICY_AUTOMATIC,
-  				 GTK_POLICY_ALWAYS);
+                                 GTK_POLICY_ALWAYS);
   gtk_container_add(GTK_CONTAINER(vgrid), sw);
 
   label = gtk_label_new(_("Chat"));
@@ -1901,6 +1869,8 @@ int ui_main(int argc, char **argv)
       log_fatal(_("Failed to open graphical mode."));
       return EXIT_FAILURE;
     }
+
+    g_set_prgname("org.freeciv.gtk322");
 
     help_system_init();
 
@@ -2266,7 +2236,7 @@ static gboolean get_net_input(GIOChannel *source, GIOCondition condition,
   Set socket writability state
 **************************************************************************/
 static void set_wait_for_writable_socket(struct connection *pc,
-					 bool socket_writable)
+                                         bool socket_writable)
 {
   static bool previous_state = FALSE;
 
@@ -2352,18 +2322,18 @@ void popup_quit_dialog(void)
 
   if (!dialog) {
     dialog = gtk_message_dialog_new(NULL,
-	0,
-	GTK_MESSAGE_WARNING,
-	GTK_BUTTONS_YES_NO,
-	_("Are you sure you want to quit?"));
+                                    0,
+                                    GTK_MESSAGE_WARNING,
+                                    GTK_BUTTONS_YES_NO,
+                                    _("Are you sure you want to quit?"));
     setup_dialog(dialog, toplevel);
 
     gtk_window_set_position(GTK_WINDOW(dialog), GTK_WIN_POS_MOUSE);
 
     g_signal_connect(dialog, "response",
-	G_CALLBACK(quit_dialog_response), NULL);
+                     G_CALLBACK(quit_dialog_response), NULL);
     g_signal_connect(dialog, "destroy",
-	G_CALLBACK(gtk_widget_destroyed), &dialog);
+                     G_CALLBACK(gtk_widget_destroyed), &dialog);
   }
 
   gtk_window_present(GTK_WINDOW(dialog));

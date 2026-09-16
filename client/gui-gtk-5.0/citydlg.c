@@ -20,7 +20,7 @@
 #include <string.h>
 
 #include <gtk/gtk.h>
-#include <gdk/gdkkeysyms.h>
+#include <gdk/gdk.h>
 
 /* utility */
 #include "bitvector.h"
@@ -1233,7 +1233,7 @@ static void create_and_append_overview_page(struct city_dialog *pdialog)
 {
   GtkWidget *page, *bottom;
   GtkWidget *right, *frame, *table;
-  GtkWidget *label, *sw, *view, *bar;
+  GtkWidget *label, *sw, *view, *bar, *vp;
   /* TRANS: Overview tab in city dialog */
   const char *tab_title = _("_Overview");
   int unit_height = tileset_unit_with_upkeep_height(tileset);
@@ -1370,7 +1370,10 @@ static void create_and_append_overview_page(struct city_dialog *pdialog)
 
   table = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
   gtk_widget_set_size_request(table, -1, unit_height);
-  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(sw), table);
+  vp = gtk_viewport_new(NULL, NULL);
+  gtk_scrollable_set_hscroll_policy(GTK_SCROLLABLE(vp), GTK_SCROLL_NATURAL);
+  gtk_viewport_set_child(GTK_VIEWPORT(vp), table);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(sw), vp);
 
   pdialog->overview.supported_unit_table = table;
   unit_node_vector_init(&pdialog->overview.supported_units);
@@ -1385,7 +1388,10 @@ static void create_and_append_overview_page(struct city_dialog *pdialog)
 
   table = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
   gtk_widget_set_size_request(table, -1, unit_height);
-  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(sw), table);
+  vp = gtk_viewport_new(NULL, NULL);
+  gtk_scrollable_set_hscroll_policy(GTK_SCROLLABLE(vp), GTK_SCROLL_NATURAL);
+  gtk_viewport_set_child(GTK_VIEWPORT(vp), table);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(sw), vp);
 
   pdialog->overview.present_unit_table = table;
   unit_node_vector_init(&pdialog->overview.present_units);
@@ -1876,7 +1882,7 @@ static struct city_dialog *create_city_dialog(struct city *pcity)
                                  canvas_width, canvas_height);
 
   pdialog->shell = gtk_dialog_new();
-  gtk_window_set_title(GTK_WINDOW(pdialog->shell), city_name_get(pcity));
+  gtk_window_set_title(GTK_WINDOW(pdialog->shell), city_name_getx(pcity));
   setup_dialog(pdialog->shell, toplevel);
 
   g_signal_connect(pdialog->shell, "destroy",
@@ -2040,28 +2046,28 @@ static void city_dialog_update_title(struct city_dialog *pdialog)
   if (city_unhappy(pdialog->pcity)) {
     /* TRANS: city dialog title */
     buf = g_strdup_printf(_("<b>%s</b> - %s citizens - DISORDER"),
-                          city_name_get(pdialog->pcity),
+                          city_name_getx(pdialog->pcity),
                           population_to_text(city_population(pdialog->pcity)));
   } else if (city_celebrating(pdialog->pcity)) {
     /* TRANS: city dialog title */
     buf = g_strdup_printf(_("<b>%s</b> - %s citizens - celebrating"),
-                          city_name_get(pdialog->pcity),
+                          city_name_getx(pdialog->pcity),
                           population_to_text(city_population(pdialog->pcity)));
   } else if (city_happy(pdialog->pcity)) {
     /* TRANS: city dialog title */
     buf = g_strdup_printf(_("<b>%s</b> - %s citizens - happy"),
-                          city_name_get(pdialog->pcity),
+                          city_name_getx(pdialog->pcity),
                           population_to_text(city_population(pdialog->pcity)));
   } else {
     /* TRANS: city dialog title */
     buf = g_strdup_printf(_("<b>%s</b> - %s citizens"),
-                          city_name_get(pdialog->pcity),
+                          city_name_getx(pdialog->pcity),
                           population_to_text(city_population(pdialog->pcity)));
   }
 
   now = gtk_label_get_text(GTK_LABEL(pdialog->name_label));
   if (strcmp(now, buf) != 0) {
-    gtk_window_set_title(GTK_WINDOW(pdialog->shell), city_name_get(pdialog->pcity));
+    gtk_window_set_title(GTK_WINDOW(pdialog->shell), city_name_getx(pdialog->pcity));
     gtk_label_set_markup(GTK_LABEL(pdialog->name_label), buf);
   }
 
@@ -2441,7 +2447,8 @@ static void city_dialog_update_building(struct city_dialog *pdialog)
     name_and_sort_items(targets, targets_used, items, FALSE, pcity);
 
     for (item = 0; item < targets_used; item++) {
-      if (can_city_build_now(&(wld.map), pcity, &items[item].item)) {
+      if (can_city_build_now(&(wld.map), pcity, &items[item].item,
+                             RPT_CERTAIN)) {
         const char *name;
         struct sprite *sprite;
         GdkPixbuf *pix;
@@ -3069,7 +3076,7 @@ static gboolean middle_present_unit_release(GtkGestureClick *gesture,
       && NULL != (pcity = tile_city(unit_tile(punit)))
       && NULL != (pdialog = get_city_dialog(pcity))
       && can_client_issue_orders()) {
-    unit_focus_set(punit);
+    unit_focus_try(punit);
     close_city_dialog(pdialog);
   }
 
@@ -3092,7 +3099,7 @@ static gboolean middle_supported_unit_release(GtkGestureClick *gesture, int n_pr
       && NULL != (pcity = game_city_by_number(punit->homecity))
       && NULL != (pdialog = get_city_dialog(pcity))
       && can_client_issue_orders()) {
-    unit_focus_set(punit);
+    unit_focus_try(punit);
     close_city_dialog(pdialog);
   }
 
@@ -3110,7 +3117,7 @@ static gboolean right_unit_release(GtkGestureClick *gesture, int n_press,
 
   if (NULL != punit
       && can_client_issue_orders()) {
-    unit_focus_set(punit);
+    unit_focus_try(punit);
   }
 
   return TRUE;
@@ -3156,7 +3163,11 @@ static void unit_activate_callback(GSimpleAction *action, GVariant *parameter,
     player_unit_by_number(client_player(), GPOINTER_TO_INT(data));
 
   if (NULL != punit) {
-    unit_focus_set(punit);
+    /* FIXME: If unit is not idle to begin with, we can only request
+     *        idling, and as we have no server reply yet,
+     *        the unit_focus_try() below will fail. */
+    request_new_unit_activity(punit, ACTIVITY_IDLE);
+    unit_focus_try(punit);
   }
 
   close_citydlg_unit_popover(g_object_get_data(G_OBJECT(action), "dlg"));
@@ -3177,7 +3188,12 @@ static void supported_unit_activate_close_callback(GSimpleAction *action,
     struct city *pcity =
       player_city_by_number(client_player(), punit->homecity);
 
-    unit_focus_set(punit);
+    /* FIXME: If unit is not idle to begin with, we can only request
+     *        idling, and as we have no server reply yet,
+     *        the unit_focus_try() below will fail. */
+    request_new_unit_activity(punit, ACTIVITY_IDLE);
+    unit_focus_try(punit);
+
     if (NULL != pcity) {
       struct city_dialog *pdialog = get_city_dialog(pcity);
 
@@ -3204,7 +3220,12 @@ static void present_unit_activate_close_callback(GSimpleAction *action,
   if (NULL != punit) {
     struct city *pcity = tile_city(unit_tile(punit));
 
-    unit_focus_set(punit);
+    /* FIXME: If unit is not idle to begin with, we can only request
+     *        idling, and as we have no server reply yet,
+     *        the unit_focus_try() below will fail. */
+    request_new_unit_activity(punit, ACTIVITY_IDLE);
+    unit_focus_try(punit);
+
     if (NULL != pcity) {
       struct city_dialog *pdialog = get_city_dialog(pcity);
 

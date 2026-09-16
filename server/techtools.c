@@ -443,9 +443,6 @@ void found_new_tech(struct research *presearch, Tech_type_id tech_found,
     if (shares_research) {
       char buf[250];
 
-      /* Only for players sharing the research. */
-      remove_obsolete_buildings(aplayer);
-
       /* Give free infrastructure in every city */
       if (tech_found != A_FUTURE) {
         upgrade_all_city_extras(aplayer, was_discovery);
@@ -484,8 +481,8 @@ void found_new_tech(struct research *presearch, Tech_type_id tech_found,
 
     /* Send all player an updated info of the owner of the Marco Polo
      * Wonder if this wonder has become obsolete. */
-    if (0 < had_embassies[i]
-        && 0 <= get_player_bonus(aplayer, EFT_HAVE_EMBASSIES)) {
+    if (had_embassies[i] > 0
+        && get_player_bonus(aplayer, EFT_HAVE_EMBASSIES) <= 0) {
       send_player_all_c(aplayer, aplayer->connections);
       players_iterate(pother_player) {
         if (aplayer != pother_player) {
@@ -900,7 +897,8 @@ static void research_tech_lost(struct research *presearch, Tech_type_id tech)
       bool update = FALSE;
 
       if (pcity->production.kind == VUT_UTYPE
-          && !can_city_build_unit_now(nmap, pcity, pcity->production.value.utype)) {
+          && !can_city_build_unit_now(nmap, pcity, pcity->production.value.utype,
+                                      RPT_CERTAIN)) {
         notify_player(pplayer, city_tile(pcity),
                       E_CITY_CANTBUILD, ftc_server,
                       _("%s can't build %s. The required technology was "
@@ -913,7 +911,8 @@ static void research_tech_lost(struct research *presearch, Tech_type_id tech)
 
       if (pcity->production.kind == VUT_IMPROVEMENT
           && !can_city_build_improvement_now(pcity,
-                                             pcity->production.value.building)) {
+                                             pcity->production.value.building,
+                                             RPT_CERTAIN)) {
         notify_player(pplayer, city_tile(pcity),
                       E_CITY_CANTBUILD, ftc_server,
                       _("%s can't build %s. The required technology was "

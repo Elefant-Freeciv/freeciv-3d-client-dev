@@ -225,6 +225,12 @@
             <child>
               <object class="GtkMenuItem" id="CENTER_VIEW" />
             </child>
+            <child>
+              <object class="GtkMenuItem" id="ZOOM_IN" />
+            </child>
+            <child>
+              <object class="GtkMenuItem" id="ZOOM_OUT" />
+            </child>
           </object>
         </child>
       </object>
@@ -583,6 +589,9 @@
             </child>
             <child>
               <object class="GtkMenuItem" id="HELP_COMBAT" />
+            </child>
+            <child>
+              <object class="GtkMenuItem" id="HELP_COUNTERS" />
             </child>
             <child>
               <object class="GtkMenuItem" id="HELP_ZOC" />

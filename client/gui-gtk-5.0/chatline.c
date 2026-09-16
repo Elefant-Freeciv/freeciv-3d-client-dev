@@ -20,7 +20,7 @@
 #include <string.h>
 #include <time.h>
 
-#include <gdk/gdkkeysyms.h>
+#include <gdk/gdk.h>
 
 /* utility */
 #include "fcintl.h"
@@ -108,7 +108,7 @@ static gboolean il_lost_focus(GtkEventControllerFocus *controller,
 static gboolean il_gained_focus(GtkEventControllerFocus *controller,
                                 gpointer data)
 {
-  menus_disable_unit_commands();
+  menus_disable_char_commands();
 
   return TRUE;
 }
@@ -1027,7 +1027,7 @@ bool chatline_is_scrolled_to_bottom(void)
 /**********************************************************************//**
   Scrolls the pregame and in-game chat windows all the way to the bottom.
 
-  Why do we do it in such a convuluted fasion rather than calling
+  Why do we do it in such a convoluted fashion rather than calling
   chatline_scroll_to_bottom() directly from toplevel_configure?
   Because the widget is not at its final size yet when the configure
   event occurs.

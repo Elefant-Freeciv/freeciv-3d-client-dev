@@ -742,6 +742,9 @@ bool action_univs_not_blocking(const struct action *paction,
 
 bool action_immune_government(struct government *gov, action_id act);
 
+bool action_enablers_allow(const action_id wanted_action,
+                           const struct req_context *actor,
+                           const struct req_context *target);
 bool is_action_possible_on_city(action_id act_id,
                                 const struct player *actor_player,
                                 const struct city *target_city);
@@ -767,6 +770,19 @@ void action_array_add_all_by_result(action_id *act_array,
 /* Action auto performers */
 const struct action_auto_perf *action_auto_perf_by_number(const int num);
 struct action_auto_perf *action_auto_perf_slot_number(const int num);
+
+enum gen_action select_actres_action_unit_on_stack(struct civ_map *nmap,
+                                                   enum action_result actres,
+                                                   struct unit *punit,
+                                                   struct tile *ptile);
+enum gen_action select_actres_action_unit_on_tile(struct civ_map *nmap,
+                                                  enum action_result actres,
+                                                  struct unit *punit,
+                                                  struct tile *ptile);
+enum gen_action select_actres_action_unit_on_city(struct civ_map *nmap,
+                                                  enum action_result actres,
+                                                  struct unit *punit,
+                                                  struct city *pcity);
 
 #ifdef __cplusplus
 }

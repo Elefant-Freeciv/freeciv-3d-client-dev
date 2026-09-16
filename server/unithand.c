@@ -1301,8 +1301,9 @@ static struct player *need_war_player_hlp(const struct unit *actor,
   /* No check if other, non war, diplomatic states also could make the
    * action legal. This is need_war_player() so war is always the answer.
    * If you disagree and decide to add support please check that
-   * webperimental's "can't found a city on a tile belonging to a non enemy"
-   * rule still is detected. */
+   * rules like former webperimental ruleset's
+   * "can't found a city on a tile belonging to a non enemy"
+   * are still detected. */
 
   return nullptr;
 }
@@ -4387,8 +4388,6 @@ static void handle_unit_change_activity_real(struct player *pplayer,
     adv_unit_new_task(punit, AUT_NONE, nullptr);
   }
 
-  punit->goto_tile = nullptr;
-
   if (activity == ACTIVITY_GOTO) {
     /* Don't permit a client to set a unit's activity to ACTIVITY_GOTO.
      * Setting ACTIVITY_GOTO from the client results in a unit indicating
@@ -4404,6 +4403,8 @@ static void handle_unit_change_activity_real(struct player *pplayer,
     /* Please use unit_server_side_agent_set(). */
     return;
   }
+
+  punit->goto_tile = nullptr;
 
   /* The activity can now be set. */
   unit_activity_handling_targeted(punit, activity, &activity_target,

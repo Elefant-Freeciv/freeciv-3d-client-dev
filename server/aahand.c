@@ -1,0 +1,126 @@
+/****************************************************************************
+ Freeciv - Copyright (C) 2004 - The Freeciv Team
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2, or (at your option)
+   any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+****************************************************************************/
+
+#ifdef HAVE_CONFIG_H
+#include <fc_config.h>
+#endif
+
+/* common/aicore */
+#include "pf_tools.h"
+
+/* common */
+#include "accessarea.h"
+#include "player.h"
+#include "tiledef.h"
+
+#include "aahand.h"
+
+/*********************************************************************//**
+  Construct access areas
+  @param nmap Map to use when determining access
+  @param plr  Player to construct areas for
+*************************************************************************/
+void access_areas_refresh(struct civ_map *nmap, struct player *plr)
+{
+  const struct unit_type *access_utype = access_info_access_unit();
+
+  if (access_utype != nullptr) {
+    struct unit *access_unit;
+    struct aarea_list *alist;
+    int index = 0;
+    struct packet_access_area packet;
+
+    area_list_clear_plr(plr);
+    alist = aarea_list_new();
+
+    area_list_for_player_set(plr, alist);
+
+    city_list_iterate(plr->cities, pcity) {
+      pcity->aarea = nullptr;
+    } city_list_iterate_end;
+
+    access_unit = unit_virtual_create(plr, nullptr,
+                                      access_utype, 0);
+
+    packet.player = player_number(plr);
+
+    city_list_iterate(plr->cities, pcity) {
+      struct packet_city_access_area caarea_packet;
+
+      if (pcity->aarea == nullptr) {
+        struct access_area *aarea = fc_malloc(sizeof(struct access_area));
+        struct pf_parameter parameter;
+        struct pf_map *pfm;
+
+        aarea->index = index++;
+        aarea->cities = city_list_new();
+        aarea->capital = is_capital(pcity);
+
+        pcity->aarea = aarea;
+        city_list_append(aarea->cities, pcity);
+        aarea_list_append(alist, aarea);
+
+        unit_tile_set(access_unit, city_tile(pcity));
+        pft_fill_unit_parameter(&parameter, nmap, access_unit);
+        pfm = pf_map_new(&parameter);
+
+        city_list_iterate(plr->cities, pcity2) {
+          if (pcity2->aarea == nullptr) {
+            struct pf_path *path;
+
+            path = pf_map_path(pfm, city_tile(pcity2));
+            if (path != nullptr) {
+              pcity2->aarea = aarea;
+              city_list_append(aarea->cities, pcity2);
+
+              if (!aarea->capital && is_capital(pcity2)) {
+                aarea->capital = TRUE;
+              }
+            }
+
+            pf_path_destroy(path);
+          }
+        } city_list_iterate_end;
+
+        BV_CLR_ALL(aarea->tiledefs);
+        BV_CLR_ALL(packet.tiledefs);
+        pf_map_tiles_iterate(pfm, ptile, TRUE) {
+          if (ptile != nullptr) {
+            tiledef_iterate(td) {
+              if (tile_matches_tiledef(td, ptile)) {
+                int tn = tiledef_number(td);
+
+                BV_SET(aarea->tiledefs, tn);
+                BV_SET(packet.tiledefs, tn);
+              }
+            } tiledef_iterate_end;
+          }
+        } pf_map_tiles_iterate_end;
+
+        pf_map_destroy(pfm);
+
+        packet.index = aarea->index;
+        packet.capital = aarea->capital;
+
+        lsend_packet_access_area(plr->connections, &packet);
+      }
+
+      caarea_packet.city = pcity->id;
+      caarea_packet.aarea = pcity->aarea->index;
+
+      lsend_packet_city_access_area(plr->connections, &caarea_packet);
+    } city_list_iterate_end;
+
+    unit_virtual_destroy(access_unit);
+  }
+}

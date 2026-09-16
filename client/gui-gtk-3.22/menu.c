@@ -33,6 +33,7 @@
 #include "unit.h"
 
 /* client */
+#include "audio.h"
 #include "client_main.h"
 #include "clinet.h"
 #include "connectdlg_common.h"
@@ -40,6 +41,7 @@
 #include "mapview_common.h"
 #include "options.h"
 #include "tilespec.h"
+#include "zoom.h"
 
 /* client/gui-gtk-3.22 */
 #include "chatline.h"
@@ -145,6 +147,7 @@ static void bg_append3_callback(GtkMenuItem *item, gpointer data);
 static void help_overview_callback(GtkMenuItem *item, gpointer data);
 static void help_playing_callback(GtkMenuItem *item, gpointer data);
 static void help_policies_callback(GtkMenuItem *item, gpointer data);
+static void help_counters_callback(GtkMenuItem *item, gpointer data);
 static void help_terrain_callback(GtkMenuItem *item, gpointer data);
 static void help_economy_callback(GtkMenuItem *item, gpointer data);
 static void help_cities_callback(GtkMenuItem *item, gpointer data);
@@ -215,6 +218,8 @@ static void toggle_fog_callback(GtkCheckMenuItem *item, gpointer data);
 static void scenario_properties_callback(GtkMenuItem *item, gpointer data);
 static void save_scenario_callback(GtkMenuItem *item, gpointer data);
 static void center_view_callback(GtkMenuItem *item, gpointer data);
+static void zoom_in_callback(GtkMenuItem *item, gpointer data);
+static void zoom_out_callback(GtkMenuItem *item, gpointer data);
 static void report_economy_callback(GtkMenuItem *item, gpointer data);
 static void report_research_callback(GtkMenuItem *item, gpointer data);
 static void multiplier_callback(GtkMenuItem *item, gpointer data);
@@ -385,6 +390,8 @@ static struct menu_entry_info menu_entries[] =
     G_CALLBACK(help_playing_callback), MGROUP_SAFE },
   { "HELP_POLICIES", N_("Policies"), 0, 0,
     G_CALLBACK(help_policies_callback), MGROUP_SAFE },
+  { "HELP_COUNTERS", N_("Counters"), 0, 0,
+    G_CALLBACK(help_counters_callback), MGROUP_SAFE },
   { "HELP_TERRAIN", N_("Terrain"), 0, 0,
     G_CALLBACK(help_terrain_callback), MGROUP_SAFE },
   { "HELP_ECONOMY", N_("Economy"), 0, 0,
@@ -507,6 +514,10 @@ static struct menu_entry_info menu_entries[] =
 
   { "CENTER_VIEW", N_("_Center View"), GDK_KEY_c, 0,
     G_CALLBACK(center_view_callback), MGROUP_PLAYER },
+  { "ZOOM_IN", N_("_Zoom in"), GDK_KEY_plus, 0,
+    G_CALLBACK(zoom_in_callback), MGROUP_PLAYER },
+  { "ZOOM_OUT", N_("_Zoom out"), GDK_KEY_minus, 0,
+    G_CALLBACK(zoom_out_callback), MGROUP_PLAYER },
   { "REPORT_ECONOMY", N_("_Economy"), GDK_KEY_F5, 0,
     G_CALLBACK(report_economy_callback), MGROUP_PLAYER },
   { "REPORT_RESEARCH", N_("_Research"), GDK_KEY_F6, 0,
@@ -876,10 +887,19 @@ static void help_language_callback(GtkMenuItem *item, gpointer data)
 
 /************************************************************************//**
   Item "HELP_POLICIES" callback.
+  Multipliers (aka policies)
 ****************************************************************************/
 static void help_policies_callback(GtkMenuItem *item, gpointer data)
 {
   popup_help_dialog_string(HELP_MULTIPLIER_ITEM);
+}
+
+/************************************************************************//**
+  Item "HELP_COUNTERS" callback.
+****************************************************************************/
+static void help_counters_callback(GtkMenuItem *item, gpointer data)
+{
+  popup_help_dialog_string(HELP_COUNTER_ITEM);
 }
 
 /************************************************************************//**
@@ -2085,6 +2105,22 @@ static void center_view_callback(GtkMenuItem *action, gpointer data)
 }
 
 /************************************************************************//**
+  Action "ZOOM_IN" callback.
+****************************************************************************/
+static void zoom_in_callback(GtkMenuItem *action, gpointer data)
+{
+  zoom_step_up();
+}
+
+/************************************************************************//**
+  Action "ZOOM_OUT" callback.
+****************************************************************************/
+static void zoom_out_callback(GtkMenuItem *action, gpointer data)
+{
+  zoom_step_down();
+}
+
+/************************************************************************//**
   Action "REPORT_UNITS" callback.
 ****************************************************************************/
 static void report_units_callback(GtkMenuItem *action, gpointer data)
@@ -2428,6 +2464,9 @@ void real_menus_update(void)
       }
     } unit_list_iterate_end;
   }
+
+  menu_entry_set_sensitive("VOLUME_UP", !audio_is_dummy_plugin());
+  menu_entry_set_sensitive("VOLUME_DOWN", !audio_is_dummy_plugin());
 
   menu_entry_group_set_sensitive(MGROUP_EDIT, editor_is_active());
   menu_entry_group_set_sensitive(MGROUP_PLAYING, can_client_issue_orders()

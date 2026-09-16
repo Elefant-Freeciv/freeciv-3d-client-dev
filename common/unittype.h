@@ -838,11 +838,13 @@ bool utype_player_already_has_this_unique(const struct player *pplayer,
 
 bool can_player_build_unit_direct(const struct player *p,
                                   const struct unit_type *punittype,
+                                  const enum req_problem_type prob_type,
                                   bool consider_reg_impr_req);
 bool can_player_build_unit_later(const struct player *p,
                                  const struct unit_type *punittype);
 bool can_player_build_unit_now(const struct player *p,
-                               const struct unit_type *punittype);
+                               const struct unit_type *punittype,
+                               const enum req_problem_type prob_type);
 
 #define utype_fuel(ptype) (ptype)->fuel
 
@@ -883,7 +885,7 @@ const struct unit_type *unit_type_array_last(void);
 #define unit_tech_reqs_iterate(_utype_, _p)                             \
 do {                                                                    \
  requirement_vector_iterate(&(_utype_)->build_reqs, preq_##_p) {        \
- if (preq_##_p->source.kind == VUT_ADVANCE) {                           \
+ if (preq_##_p->source.kind == VUT_ADVANCE && preq_##_p->present) {     \
    struct advance *_p = preq_##_p->source.value.advance;
 
 #define unit_tech_reqs_iterate_end                                      \

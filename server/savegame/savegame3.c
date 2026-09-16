@@ -119,7 +119,6 @@
 #include "report.h"
 #include "ruleload.h"
 #include "sanitycheck.h"
-#include "savecompat.h"
 #include "score.h"
 #include "settings.h"
 #include "spacerace.h"
@@ -139,6 +138,10 @@
 
 /* server/scripting */
 #include "script_server.h"
+
+/* server/savegame */
+#include "savecompat.h"
+#include "savemain.h"
 
 /* ai */
 #include "aitraits.h"
@@ -514,10 +517,7 @@ void savegame3_load(struct section_file *file)
 
   if (!sg_success) {
     log_error("Failure loading savegame!");
-    /* Try to get the server back to a vaguely sane state */
-    server_game_free();
-    server_game_init(FALSE);
-    load_rulesets(NULL, NULL, FALSE, NULL, TRUE, FALSE, TRUE);
+    save_restore_sane_state();
   }
 }
 
@@ -981,6 +981,14 @@ static void worklist_load(struct section_file *file, int wlist_max_length,
   worklist_init(pwl);
   pwl->length = secfile_lookup_int_default(file, 0,
                                            "%s.wl_length", path_str);
+  if (pwl->length > MAX_LEN_WORKLIST) {
+    log_sg("worklist length %d, while MAX_LEN_WORKLIST %d.",
+           pwl->length, MAX_LEN_WORKLIST);
+    pwl->length = MAX_LEN_WORKLIST;
+  } else if (pwl->length > wlist_max_length) {
+    log_sg("worklist length %d, while player's max worklist length %d.",
+           pwl->length, wlist_max_length);
+  }
 
   for (i = 0; i < pwl->length; i++) {
     kind = secfile_lookup_str(file, "%s.wl_kind%d", path_str, i);
@@ -1000,8 +1008,8 @@ static void worklist_load(struct section_file *file, int wlist_max_length,
 
   /* Padding entries */
   for (; i < wlist_max_length; i++) {
-    (void) secfile_entry_lookup(file, "%s.wl_kind%d", path_str, i);
-    (void) secfile_entry_lookup(file, "%s.wl_value%d", path_str, i);
+    secfile_entry_ignore(file, "%s.wl_kind%d", path_str, i);
+    secfile_entry_ignore(file, "%s.wl_value%d", path_str, i);
   }
 }
 
@@ -1349,8 +1357,8 @@ static void sg_load_savefile(struct loaddata *loading)
 
   /* We don't need these entries, but read them anyway to avoid
    * warnings about unread secfile entries. */
-  (void) secfile_entry_by_path(loading->file, "savefile.reason");
-  (void) secfile_entry_by_path(loading->file, "savefile.revision");
+  secfile_entry_ignore_by_path(loading->file, "savefile.reason");
+  secfile_entry_ignore_by_path(loading->file, "savefile.revision");
 
   str = secfile_lookup_str(loading->file, "savefile.orig_version");
   sz_strlcpy(game.server.orig_game_version, str);
@@ -2418,7 +2426,7 @@ static void sg_load_random(struct loaddata *loading)
     fc_rand_set_state(loading->rstate);
   } else {
     /* No random values - mark the setting. */
-    (void) secfile_entry_by_path(loading->file, "random.saved");
+    secfile_entry_ignore_by_path(loading->file, "random.saved");
 
     /* We're loading a game without a seed (which is okay, if it's a scenario).
      * We need to generate the game seed now because it will be needed later
@@ -2822,9 +2830,8 @@ static void sg_load_map(struct loaddata *loading)
   wld.map.server.have_huts
     = secfile_lookup_bool_default(loading->file, TRUE, "map.have_huts");
 
-  sg_failure_ret(secfile_lookup_bool(loading->file, &wld.map.altitude_info,
-                                     "map.altitude"),
-                 "%s", secfile_error());
+  wld.map.altitude_info
+    = secfile_lookup_bool_default(loading->file, TRUE, "map.altitude");
 
   game.scenario.have_resources
     = secfile_lookup_bool_default(loading->file, TRUE, "map.have_resources");
@@ -5064,6 +5071,11 @@ static void sg_load_player_cities(struct loaddata *loading,
   wlist_max_length = secfile_lookup_int_default(loading->file, 0,
                                                 "player%d.wl_max_length",
                                                 plrno);
+  if (wlist_max_length > MAX_LEN_WORKLIST) {
+    log_sg("wlist_max_length %d over MAX_LEN_WORKLIST (%d)",
+           wlist_max_length, MAX_LEN_WORKLIST);
+  }
+
   routes_max = secfile_lookup_int_default(loading->file, 0,
                                           "player%d.routes_max_length", plrno);
 
@@ -5264,9 +5276,9 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
   }
 
   for (; i < routes_max; i++) {
-    (void) secfile_entry_lookup(loading->file, "%s.traderoute%d", citystr, i);
-    (void) secfile_entry_lookup(loading->file, "%s.route_direction%d", citystr, i);
-    (void) secfile_entry_lookup(loading->file, "%s.route_good%d", citystr, i);
+    secfile_entry_ignore(loading->file, "%s.traderoute%d", citystr, i);
+    secfile_entry_ignore(loading->file, "%s.route_direction%d", citystr, i);
+    secfile_entry_ignore(loading->file, "%s.route_good%d", citystr, i);
   }
 
   sg_warn_ret_val(secfile_lookup_int(loading->file, &pcity->food_stock,
@@ -5552,22 +5564,22 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
     } else {
       pcity->rally_point.orders = NULL;
 
-      (void) secfile_entry_lookup(loading->file, "%s.rally_point_persistent",
-                                  citystr);
-      (void) secfile_entry_lookup(loading->file, "%s.rally_point_vigilant",
-                                  citystr);
-      (void) secfile_entry_lookup(loading->file, "%s.rally_point_orders",
-                                  citystr);
-      (void) secfile_entry_lookup(loading->file, "%s.rally_point_dirs",
-                                  citystr);
-      (void) secfile_entry_lookup(loading->file, "%s.rally_point_activities",
-                                  citystr);
-      (void) secfile_entry_lookup(loading->file, "%s.rally_point_action_vec",
-                                  citystr);
-      (void) secfile_entry_lookup(loading->file,
-                                  "%s.rally_point_tgt_vec", citystr);
-      (void) secfile_entry_lookup(loading->file,
-                                  "%s.rally_point_sub_tgt_vec", citystr);
+      secfile_entry_ignore(loading->file, "%s.rally_point_persistent",
+                           citystr);
+      secfile_entry_ignore(loading->file, "%s.rally_point_vigilant",
+                           citystr);
+      secfile_entry_ignore(loading->file, "%s.rally_point_orders",
+                           citystr);
+      secfile_entry_ignore(loading->file, "%s.rally_point_dirs",
+                           citystr);
+      secfile_entry_ignore(loading->file, "%s.rally_point_activities",
+                           citystr);
+      secfile_entry_ignore(loading->file, "%s.rally_point_action_vec",
+                           citystr);
+      secfile_entry_ignore(loading->file,
+                           "%s.rally_point_tgt_vec", citystr);
+      secfile_entry_ignore(loading->file,
+                           "%s.rally_point_sub_tgt_vec", citystr);
     }
   }
 
@@ -5600,22 +5612,22 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
       pcity->cm_parameter = NULL;
 
       for (i = 0; i < O_LAST; i++) {
-        (void) secfile_entry_lookup(loading->file,
-                                    "%s.cma_minimal_surplus,%d", citystr, i);
-        (void) secfile_entry_lookup(loading->file,
-                                    "%s.cma_factor,%d", citystr, i);
+        secfile_entry_ignore(loading->file,
+                             "%s.cma_minimal_surplus,%d", citystr, i);
+        secfile_entry_ignore(loading->file,
+                             "%s.cma_factor,%d", citystr, i);
       }
 
-      (void) secfile_entry_lookup(loading->file, "%s.max_growth",
-                                  citystr);
-      (void) secfile_entry_lookup(loading->file, "%s.require_happy",
-                                  citystr);
-      (void) secfile_entry_lookup(loading->file, "%s.allow_disorder",
-                                  citystr);
-      (void) secfile_entry_lookup(loading->file, "%s.allow_specialists",
-                                  citystr);
-      (void) secfile_entry_lookup(loading->file, "%s.happy_factor",
-                                  citystr);
+      secfile_entry_ignore(loading->file, "%s.max_growth",
+                           citystr);
+      secfile_entry_ignore(loading->file, "%s.require_happy",
+                           citystr);
+      secfile_entry_ignore(loading->file, "%s.allow_disorder",
+                           citystr);
+      secfile_entry_ignore(loading->file, "%s.allow_specialists",
+                           citystr);
+      secfile_entry_ignore(loading->file, "%s.happy_factor",
+                           citystr);
     }
   }
 
@@ -6218,11 +6230,18 @@ static bool sg_load_player_unit(struct loaddata *loading,
   sg_warn_ret_val(secfile_lookup_int(loading->file, &punit->fuel,
                                      "%s.fuel", unitstr), FALSE,
                   "%s", secfile_error());
+
   sg_warn_ret_val(secfile_lookup_int(loading->file, &ei,
                                      "%s.activity", unitstr), FALSE,
                   "%s", secfile_error());
-  activity = unit_activity_by_name(loading->activities.order[ei],
-                                   fc_strcasecmp);
+  if (ei >= 0 && ei < loading->activities.size) {
+    activity = unit_activity_by_name(loading->activities.order[ei],
+                                     fc_strcasecmp);
+  } else {
+    log_sg("Invalid activity id for unit %d", punit->id);
+    activity = ACTIVITY_IDLE;
+  }
+
   sg_warn_ret_val(secfile_lookup_int(loading->file, &ei,
                                      "%s.action", unitstr), FALSE,
                   "%s", secfile_error());
@@ -6345,15 +6364,15 @@ static bool sg_load_player_unit(struct loaddata *loading,
 
     if (punit->activity == ACTIVITY_GOTO) {
       /* goto_tile should never be NULL with ACTIVITY_GOTO */
-      log_sg("Unit %d on goto without goto_tile. Aborting goto.",
-             punit->id);
+      sg_regr(3020200, "Unit %d on goto without goto_tile. Aborting goto.",
+              punit->id);
       punit->activity = ACTIVITY_IDLE;
     }
 
     /* These variables are not used but needed for saving the unit table.
      * Load them to prevent unused variables errors. */
-    (void) secfile_entry_lookup(loading->file, "%s.goto_x", unitstr);
-    (void) secfile_entry_lookup(loading->file, "%s.goto_y", unitstr);
+    secfile_entry_ignore(loading->file, "%s.goto_x", unitstr);
+    secfile_entry_ignore(loading->file, "%s.goto_y", unitstr);
   }
 
   /* Load AI data of the unit. */
@@ -6434,8 +6453,9 @@ static bool sg_load_player_unit(struct loaddata *loading,
       log_sg("Bad action_decision_tile for unit %d", punit->id);
     }
   } else {
-    (void) secfile_entry_lookup(loading->file, "%s.action_decision_tile_x", unitstr);
-    (void) secfile_entry_lookup(loading->file, "%s.action_decision_tile_y", unitstr);
+    secfile_entry_ignore(loading->file, "%s.action_decision_tile_x", unitstr);
+    secfile_entry_ignore(loading->file, "%s.action_decision_tile_y", unitstr);
+
     punit->action_decision_tile = NULL;
   }
 
@@ -6650,12 +6670,12 @@ static bool sg_load_player_unit(struct loaddata *loading,
       }
 
       for (; j < orders_max_length; j++) {
-        (void) secfile_entry_lookup(loading->file,
-                                    "%s.action_vec,%d", unitstr, j);
-        (void) secfile_entry_lookup(loading->file,
-                                    "%s.tgt_vec,%d", unitstr, j);
-        (void) secfile_entry_lookup(loading->file,
-                                    "%s.sub_tgt_vec,%d", unitstr, j);
+        secfile_entry_ignore(loading->file,
+                             "%s.action_vec,%d", unitstr, j);
+        secfile_entry_ignore(loading->file,
+                             "%s.tgt_vec,%d", unitstr, j);
+        secfile_entry_ignore(loading->file,
+                             "%s.sub_tgt_vec,%d", unitstr, j);
       }
     } else {
       int j;
@@ -6670,23 +6690,23 @@ static bool sg_load_player_unit(struct loaddata *loading,
       punit->orders.list = NULL;
       punit->orders.length = 0;
 
-      (void) secfile_entry_lookup(loading->file, "%s.orders_index", unitstr);
-      (void) secfile_entry_lookup(loading->file, "%s.orders_repeat", unitstr);
-      (void) secfile_entry_lookup(loading->file, "%s.orders_vigilant", unitstr);
-      (void) secfile_entry_lookup(loading->file, "%s.orders_list", unitstr);
-      (void) secfile_entry_lookup(loading->file, "%s.dir_list", unitstr);
-      (void) secfile_entry_lookup(loading->file, "%s.activity_list", unitstr);
-      (void) secfile_entry_lookup(loading->file, "%s.action_vec", unitstr);
-      (void) secfile_entry_lookup(loading->file, "%s.tgt_vec", unitstr);
-      (void) secfile_entry_lookup(loading->file, "%s.sub_tgt_vec", unitstr);
+      secfile_entry_ignore(loading->file, "%s.orders_index", unitstr);
+      secfile_entry_ignore(loading->file, "%s.orders_repeat", unitstr);
+      secfile_entry_ignore(loading->file, "%s.orders_vigilant", unitstr);
+      secfile_entry_ignore(loading->file, "%s.orders_list", unitstr);
+      secfile_entry_ignore(loading->file, "%s.dir_list", unitstr);
+      secfile_entry_ignore(loading->file, "%s.activity_list", unitstr);
+      secfile_entry_ignore(loading->file, "%s.action_vec", unitstr);
+      secfile_entry_ignore(loading->file, "%s.tgt_vec", unitstr);
+      secfile_entry_ignore(loading->file, "%s.sub_tgt_vec", unitstr);
 
       for (j = 1; j < orders_max_length; j++) {
-        (void) secfile_entry_lookup(loading->file,
-                                    "%s.action_vec,%d", unitstr, j);
-        (void) secfile_entry_lookup(loading->file,
-                                    "%s.tgt_vec,%d", unitstr, j);
-        (void) secfile_entry_lookup(loading->file,
-                                    "%s.sub_tgt_vec,%d", unitstr, j);
+        secfile_entry_ignore(loading->file,
+                             "%s.action_vec,%d", unitstr, j);
+        secfile_entry_ignore(loading->file,
+                             "%s.tgt_vec,%d", unitstr, j);
+        secfile_entry_ignore(loading->file,
+                             "%s.sub_tgt_vec,%d", unitstr, j);
       }
     }
   }
@@ -8141,7 +8161,7 @@ static void sg_load_sanitycheck(struct loaddata *loading)
     } unit_list_iterate_safe_end;
   } players_iterate_end;
 
-  /* Fix stacking issues.  We don't rely on the savegame preserving
+  /* Fix stacking issues. We don't rely on the savegame preserving
    * alliance invariants (old savegames often did not) so if there are any
    * unallied units on the same tile we just bounce them. */
   players_iterate(pplayer) {
@@ -8181,7 +8201,7 @@ static void sg_load_sanitycheck(struct loaddata *loading)
   /* Check worked tiles map */
 #ifdef FREECIV_DEBUG
   if (loading->worked_tiles != NULL) {
-    /* check the entire map for unused worked tiles */
+    /* Check the entire map for unused worked tiles */
     whole_map_iterate(&(wld.map), ptile) {
       if (loading->worked_tiles[ptile->index] != -1) {
         log_error("[city id: %d] Unused worked tile at (%d, %d).",
@@ -8249,6 +8269,17 @@ static void sg_load_sanitycheck(struct loaddata *loading)
   /* Check max rates (rules may have changed since saving) */
   players_iterate(pplayer) {
     player_limit_to_max_rates(pplayer);
+  } players_iterate_end;
+
+  /* Check initial city sanity */
+  players_iterate(pplayer) {
+    if (!player_has_flag(pplayer, PLRF_FIRST_CITY)
+        && city_list_size(pplayer->cities) > 0) {
+      log_sg(_("%s inconsistency: Has never had their first city, "
+               "but has cities this very moment. Fixing."),
+             player_name(pplayer));
+      BV_SET(pplayer->flags, PLRF_FIRST_CITY);
+    }
   } players_iterate_end;
 
   if (0 == strlen(server.game_identifier)

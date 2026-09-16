@@ -42,7 +42,6 @@
 
 // ruledit
 #include "comments.h"
-#include "ruledit_qt.h"
 
 #include "ruledit.h"
 
@@ -215,16 +214,4 @@ static int re_parse_cmdline(int argc, char *argv[])
   log_init(nullptr, loglevel, nullptr, nullptr, fatal_assertions);
 
   return ui_options;
-}
-
-/**********************************************************************//**
-  Show widget if experimental features enabled, hide otherwise
-**************************************************************************/
-void show_experimental(QWidget *wdg)
-{
-#ifdef RULEDIT_EXPERIMENTAL
-  wdg->show();
-#else
-  wdg->hide();
-#endif
 }

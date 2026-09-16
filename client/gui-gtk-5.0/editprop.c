@@ -18,7 +18,7 @@
 #include <limits.h> /* USHRT_MAX */
 
 #include <gtk/gtk.h>
-#include <gdk/gdkkeysyms.h>
+#include <gdk/gdk.h>
 
 /* utility */
 #include "bitvector.h"
@@ -3686,6 +3686,7 @@ static struct extviewer *extviewer_new(struct objprop *op)
     }
     gtk_widget_set_hexpand(view, TRUE);
     gtk_widget_set_vexpand(view, TRUE);
+    gtk_widget_add_css_class(GTK_WIDGET(view), "large-pixbufs");
 
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrollwin), view);
   }
@@ -4858,6 +4859,7 @@ property_page_new(enum editor_object_type objtype,
   view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(pp->object_store));
   gtk_widget_set_hexpand(view, TRUE);
   gtk_widget_set_vexpand(view, TRUE);
+  gtk_widget_add_css_class(GTK_WIDGET(view), "large-pixbufs");
 
   property_page_objprop_iterate(pp, op) {
     if (!objprop_show_in_listview(op)) {
@@ -5302,7 +5304,7 @@ static void property_page_add_objbinds_from_tile(struct property_page *pp,
 
 /************************************************************************//**
   Set the column value in the list store of the property page.
-  Returns TRUE if data was enetered into the store.
+  Returns TRUE if data was entered into the store.
 
   NB: This must match the conversion in objprop_get_gtype.
 ****************************************************************************/

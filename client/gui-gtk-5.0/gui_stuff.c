@@ -21,7 +21,7 @@
 #include <string.h>
 
 #include <gtk/gtk.h>
-#include <gdk/gdkkeysyms.h>
+#include <gdk/gdk.h>
 
 /* utility */
 #include "fcintl.h"
@@ -884,7 +884,10 @@ void gui_dialog_destroy(struct gui_dialog *dlg)
 {
   switch (dlg->type) {
   case GUI_DIALOG_WINDOW:
-    gtk_window_destroy(GTK_WINDOW(dlg->v.window));
+    if (dlg->v.window != NULL) {
+      gtk_window_destroy(GTK_WINDOW(dlg->v.window));
+      dlg->v.window = NULL;
+    }
     break;
   case GUI_DIALOG_TAB:
     {

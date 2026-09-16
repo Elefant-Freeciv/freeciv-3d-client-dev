@@ -438,6 +438,73 @@ static bool is_my_turn(struct unit *punit, struct unit *pdef)
 }
 
 /**********************************************************************//**
+  Select attack kind of action to do against the tile.
+  Returns ACTION_NONE if no attack action possible.
+**************************************************************************/
+enum gen_action dai_select_tile_attack_action(struct civ_map *nmap,
+                                              struct unit *punit,
+                                              struct tile *ptile,
+                                              enum action_target_kind *kind)
+{
+  enum gen_action selected;
+  struct city *pcity;
+
+  if ((selected = select_actres_action_unit_on_stack(nmap, ACTRES_CAPTURE_UNITS,
+                                                     punit, ptile))
+      != ACTION_NONE
+      || (selected = select_actres_action_unit_on_stack(nmap, ACTRES_COLLECT_RANSOM,
+                                                        punit, ptile))
+      != ACTION_NONE
+      || (selected = select_actres_action_unit_on_stack(nmap, ACTRES_BOMBARD,
+                                                        punit, ptile))
+      != ACTION_NONE
+      || (selected = select_actres_action_unit_on_stack(nmap, ACTRES_NUKE_UNITS,
+                                                        punit, ptile))
+      != ACTION_NONE) {
+    if (kind != nullptr) {
+      *kind = ATK_STACK;
+    }
+
+    return selected;
+  }
+
+  if ((selected = select_actres_action_unit_on_tile(nmap, ACTRES_NUKE,
+                                                    punit, ptile))
+      != ACTION_NONE) {
+    if (kind != nullptr) {
+      *kind = ATK_TILE;
+    }
+
+    return selected;
+  }
+
+  pcity = tile_city(ptile);
+  if (pcity != nullptr) {
+    if ((selected = select_actres_action_unit_on_city(nmap, ACTRES_NUKE,
+                                                      punit, pcity))
+        != ACTION_NONE) {
+      if (kind != nullptr) {
+        *kind = ATK_CITY;
+      }
+
+      return selected;
+    }
+  }
+
+  if ((selected = select_actres_action_unit_on_stack(nmap, ACTRES_ATTACK,
+                                                     punit, ptile))
+      != ACTION_NONE) {
+    if (kind != nullptr) {
+      *kind = ATK_STACK;
+    }
+
+    return selected;
+  }
+
+  return ACTION_NONE;
+}
+
+/**********************************************************************//**
   This function appraises the location (x, y) for a quick hit-n-run
   operation. We do not take into account reinforcements: rampage is for
   loners.
@@ -464,8 +531,7 @@ static int dai_rampage_want(struct unit *punit, struct tile *ptile)
   if (can_unit_attack_tile(punit, nullptr, ptile)
       && (pdef = get_defender(nmap, punit, ptile, nullptr))
       /* Action enablers might prevent attacking */
-      && is_action_enabled_unit_on_stack(nmap, ACTION_ATTACK,
-                                         punit, ptile)) {
+      && dai_select_tile_attack_action(nmap, punit, ptile, nullptr) != ACTION_NONE) {
     /* See description of kill_desire() about these variables. */
     int attack = unit_att_rating_now(punit);
     int benefit = stack_cost(punit, pdef);
@@ -1020,7 +1086,7 @@ static void single_invader(struct ai_city *city_data,
 
   If dest is TRUE then a valid goto is presumed.
 **************************************************************************/
-static void invasion_funct(struct ai_type *ait, struct unit *punit,
+static bool invasion_funct(struct ai_type *ait, struct unit *punit,
                            bool dest, int radius, int which)
 {
   struct tile *ptile;
@@ -1029,6 +1095,8 @@ static void invasion_funct(struct ai_type *ait, struct unit *punit,
   CHECK_UNIT(punit);
 
   if (dest) {
+    fc_assert_ret_val(punit->goto_tile != NULL, FALSE);
+
     ptile = punit->goto_tile;
   } else {
     ptile = unit_tile(punit);
@@ -1057,6 +1125,8 @@ static void invasion_funct(struct ai_type *ait, struct unit *punit,
       } unit_cargo_iterate_end;
     }
   } square_iterate_end;
+
+  return TRUE;
 }
 
 /**********************************************************************//**
@@ -1248,10 +1318,10 @@ adv_want find_something_to_kill(struct ai_type *ait, struct player *pplayer,
     /* Dealing with invasion stuff */
     if (IS_ATTACKER(atype)) {
       if (aunit->activity == ACTIVITY_GOTO) {
-        invasion_funct(ait, aunit, TRUE, 0,
-                       (unit_can_take_over(aunit)
-                        ? INVASION_OCCUPY : INVASION_ATTACK));
-        if ((pcity = tile_city(aunit->goto_tile))) {
+        if (invasion_funct(ait, aunit, TRUE, 0,
+                           (unit_can_take_over(aunit)
+                            ? INVASION_OCCUPY : INVASION_ATTACK))
+            && (pcity = tile_city(aunit->goto_tile))) {
           struct ai_city *city_data = def_ai_city_data(pcity, ait);
 
           city_data->attack += adv_unit_att_rating(aunit);
@@ -3451,7 +3521,8 @@ static bool role_unit_cb(struct unit_type *ptype, void *data)
   }
 
   if (cb_data->build_city == nullptr
-      || can_city_build_unit_now(nmap, cb_data->build_city, ptype)) {
+      || can_city_build_unit_now(nmap, cb_data->build_city, ptype,
+                                 RPT_CERTAIN)) {
     return TRUE;
   }
 

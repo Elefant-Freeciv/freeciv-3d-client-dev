@@ -74,6 +74,7 @@ Site:              World, Alliance, Team, Player, Continent, Traderoute,
                    City, Tile, Local
 Extra:             Local, Tile, Adjacent, CAdjacent, Traderoute, City
 Tiledef:           Tile, Adjacent, CAdjacent, Traderoute, City
+TiledefConnected:  City
 RoadFlag:          Local, Tile, Adjacent, CAdjacent, Traderoute, City
 ExtraFlag:         Local, Tile, Adjacent, CAdjacent, Traderoute, City
 Terrain:           Tile, Adjacent, CAdjacent, Traderoute, City
@@ -706,8 +707,8 @@ Surplus_Waste_Pct_By_Rel_Distance
     to world size. This is a percentage calculated from what otherwise would
     be the surplus. Percentage is (distance * amount / 100 / max_distance)
 
-Tech_Cost_Factor
-    Factor for research costs.
+Tech_Cost_Pct
+    Percentage factor for research costs.
 
 Tech_Leakage
     If value is positive, tech leakage towards the player is enabled.

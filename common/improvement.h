@@ -41,7 +41,7 @@ struct strvec;          /* Actually defined in "utility/string_vector.h". */
  */
 #define B_LAST MAX_NUM_BUILDINGS
 
-#define B_NEVER (NULL)
+#define B_NEVER (nullptr)
 
 /* Used in the network protocol. */
 BV_DEFINE(bv_imprs, B_LAST);
@@ -78,8 +78,10 @@ struct impr_type {
 
 /* General improvement accessor functions. */
 Impr_type_id improvement_count(void);
-Impr_type_id improvement_index(const struct impr_type *pimprove);
-Impr_type_id improvement_number(const struct impr_type *pimprove);
+Impr_type_id improvement_index(const struct impr_type *pimprove)
+  fc__attribute((nonnull(1)));
+Impr_type_id improvement_number(const struct impr_type *pimprove)
+  fc__attribute((nonnull(1)));
 
 struct impr_type *improvement_by_number(const Impr_type_id id);
 
@@ -145,16 +147,21 @@ const struct impr_type *improvement_replacement(const struct impr_type *pimprove
 #define WONDER_NOT_BUILT 0      /* Used as city id. */
 #define WONDER_BUILT(city_id) ((city_id) > 0)
 
-void wonder_built(const struct city *pcity, const struct impr_type *pimprove);
+void wonder_built(const struct city *pcity, const struct impr_type *pimprove)
+  fc__attribute((nonnull(1)));
 void wonder_destroyed(const struct city *pcity,
-                      const struct impr_type *pimprove);
+                      const struct impr_type *pimprove)
+  fc__attribute((nonnull(1)));
 
 bool wonder_is_lost(const struct player *pplayer,
-                    const struct impr_type *pimprove);
+                    const struct impr_type *pimprove)
+  fc__attribute((nonnull(1)));
 bool wonder_is_built(const struct player *pplayer,
-                     const struct impr_type *pimprove);
+                     const struct impr_type *pimprove)
+  fc__attribute((nonnull(1)));
 struct city *city_from_wonder(const struct player *pplayer,
-                              const struct impr_type *pimprove);
+                              const struct impr_type *pimprove)
+  fc__attribute((nonnull(1)));
 bool wonder_visible_to_player(const struct impr_type *wonder,
                               const struct player *pplayer,
                               const struct player *owner,
@@ -171,9 +178,9 @@ bool small_wonder_is_built(const struct player *pplayer,
 struct city *city_from_small_wonder(const struct player *pplayer,
                                     const struct impr_type *pimprove);
 
-/* player related improvement functions */
+/* Player related improvement functions */
 bool improvement_obsolete(const struct player *pplayer,
-			  const struct impr_type *pimprove,
+                          const struct impr_type *pimprove,
                           const struct city *pcity);
 bool is_improvement_productive(const struct city *pcity,
                                const struct impr_type *pimprove);
@@ -181,11 +188,13 @@ bool is_improvement_redundant(const struct city *pcity,
                               const struct impr_type *pimprove);
 
 bool can_player_build_improvement_direct(const struct player *p,
-                                         const struct impr_type *pimprove);
+                                         const struct impr_type *pimprove,
+                                         const enum req_problem_type prob_type);
 bool can_player_build_improvement_later(const struct player *p,
                                         const struct impr_type *pimprove);
 bool can_player_build_improvement_now(const struct player *p,
-                                      struct impr_type *pimprove);
+                                      struct impr_type *pimprove,
+                                      const enum req_problem_type prob_type);
 
 /* Initialization and iteration */
 void improvements_init(void);
@@ -196,15 +205,15 @@ void improvement_feature_cache_init(void);
 struct impr_type *improvement_array_first(void);
 const struct impr_type *improvement_array_last(void);
 
-#define improvement_iterate(_p)						\
-{									\
-  struct impr_type *_p = improvement_array_first();			\
-  if (NULL != _p) {							\
+#define improvement_iterate(_p)                                         \
+{                                                                       \
+  struct impr_type *_p = improvement_array_first();                     \
+  if (_p != nullptr) {                                                  \
     for (; _p <= improvement_array_last(); _p++) {
 
-#define improvement_iterate_end						\
-    }									\
-  }									\
+#define improvement_iterate_end                                         \
+    }                                                                   \
+  }                                                                     \
 }
 
 #define improvement_re_active_iterate(_p)                               \

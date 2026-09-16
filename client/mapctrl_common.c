@@ -100,7 +100,7 @@ void anchor_selection_rectangle(int canvas_x, int canvas_y)
 /**********************************************************************//**
   Iterate over the pixel boundaries of the rectangle and pick the tiles
   whose center falls within. Axis pixel incrementation is half tile size to
-  accomodate tilesets with varying tile shapes and proportions of X / Y.
+  accommodate tilesets with varying tile shapes and proportions of X / Y.
 
   These operations are performed on the tiles:
   -  Make tiles that contain owned cities hilited
@@ -399,6 +399,7 @@ bool clipboard_copy_production(struct tile *ptile)
 
     if (!can_player_build_unit_direct(client.conn.playing,
                                       unit_type_get(punit),
+                                      RPT_CERTAIN,
                                       FALSE))  {
       create_event(ptile, E_BAD_COMMAND, ftc_client,
                    _("You don't know how to build %s!"),
@@ -453,7 +454,7 @@ void clipboard_paste_production(struct city *pcity)
 static void clipboard_send_production_packet(struct city *pcity)
 {
   if (are_universals_equal(&pcity->production, &clipboard)
-      || !can_city_build_now(&(wld.map), pcity, &clipboard)) {
+      || !can_city_build_now(&(wld.map), pcity, &clipboard, RPT_CERTAIN)) {
     return;
   }
 

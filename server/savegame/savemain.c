@@ -24,10 +24,14 @@
 #include "ai.h"
 #include "capability.h"
 #include "game.h"
+#include "research.h"
 
 /* server */
 #include "console.h"
 #include "notify.h"
+
+/* server/ruleset */
+#include "ruleload.h"
 
 /* server/savegame */
 #include "savegame2.h"
@@ -55,6 +59,7 @@ void savegame_load(struct section_file *sfile)
 
   if (savefile_options == nullptr) {
     log_error("Missing savefile options. Can not load the savegame.");
+    save_restore_sane_state();
     return;
   }
 
@@ -68,6 +73,7 @@ void savegame_load(struct section_file *sfile)
     savegame2_load(sfile);
   } else {
     log_error("Too old savegame. Format not supported any more.");
+    save_restore_sane_state();
     return;
   }
 
@@ -333,4 +339,19 @@ void save_system_close(void)
     free(save_thread);
     save_thread = nullptr;
   }
+}
+
+/************************************************************************//**
+  Restore the server to sane state after savegame loading failure.
+****************************************************************************/
+void save_restore_sane_state(void)
+{
+  /* Try to get the server back to a vaguely sane state */
+  server_game_free();
+  server_game_init(FALSE);
+  load_rulesets(nullptr, nullptr, FALSE, nullptr, TRUE, FALSE, TRUE);
+
+  researches_iterate(presearch) {
+    presearch->techs_researched = recalculate_techs_researched(presearch);
+  } researches_iterate_end;
 }

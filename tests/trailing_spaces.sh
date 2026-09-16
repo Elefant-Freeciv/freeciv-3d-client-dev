@@ -1,15 +1,32 @@
 #!/bin/sh
 
+#/***********************************************************************
+# Freeciv - Copyright (C) 2022-2026
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2, or (at your option)
+#   any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#***********************************************************************/
+
 files=$(find $1 -name "*.ruleset" \
-             -o -name "*.tileset" \
+             -o -name "*.tilespec" \
              -o -name "*.spec" \
              -o -name "*.lua" \
+             -o -name "*.py" \
              -o -name "*.modpack" \
              -o -name "*.serv" \
              -o -name "*.txt" \
              -o -name "README*" \
              -o -name "*.xml" \
+             -o -name "*.c" \
              -o -name "*.cpp" \
+             -o -name "*.h" \
              -o -name "*.pkg" \
             | sort)
 

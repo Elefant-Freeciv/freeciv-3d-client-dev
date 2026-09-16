@@ -2,12 +2,12 @@
 
 # build_appimages.sh: Build freeciv AppImages
 #
-# (c) 2024-2025 Freeciv team
+# (c) 2024-2026 Freeciv team
 #
 # This script is licensed under Gnu General Public License version 2 or later.
 # See COPYING available from the same location you got this script.
 
-LINUXDEPLOY_VERSION="1-alpha-20250213-2"
+LINUXDEPLOY_VERSION="1-alpha-20251107-1"
 
 if test "$1" != "" ; then
   echo "Usage: $0"
@@ -28,32 +28,66 @@ fi
 # $3 - Client part of the AppImage name as produced by linuxdeploy
 # $4 - Extra configure options
 client_appimage() {
-  if ! mkdir "AppDir/$1" || ! mkdir "build/$1" ; then
-    echo "Failed to create $1 directories!" >&2
+  if ! mkdir "AppDir/client-$1" || ! mkdir "build/client-$1" ; then
+    echo "Failed to create client-$1 directories!" >&2
     return 1
   fi
 
-  cd "build/$1"
+  cd "build/client-$1"
   if ! meson setup -Dappimage=true -Dprefix=/usr -Ddefault_library=static -Dclients=$2 -Dfcmp=[] -Dtools=[] $4 "${SRC_ROOT}"
   then
-    echo "$1 setup with meson failed!" >&2
+    echo "client-$1 setup with meson failed!" >&2
     return 1
   fi
 
-  if ! DESTDIR="${BUILD_ROOT}/AppDir/$1" ninja install ; then
-    echo "$1 build with ninja failed!" >&2
+  if ! DESTDIR="${BUILD_ROOT}/AppDir/client-$1" ninja install ; then
+    echo "client-$1 build with ninja failed!" >&2
     return 1
   fi
 
   cd "${BUILD_ROOT}"
-  rm -f "AppDir/$1/usr/share/applications/org.freeciv.server.desktop"
-  if ! tools/linuxdeploy-x86_64.AppImage --appdir "AppDir/$1" --output appimage
+  rm -f "AppDir/client-$1/usr/share/applications/org.freeciv.server.desktop"
+  if ! tools/linuxdeploy-x86_64.AppImage --appdir "AppDir/client-$1" --output appimage
   then
-    echo "$1 image build with linuxdeploy failed!" >&2
+    echo "client-$1 image build with linuxdeploy failed!" >&2
     return 1
   fi
   if ! mv "Freeciv$3-x86_64.AppImage" "Freeciv-$1-${FCVER}-x86_64.AppImage" ; then
-    echo "$1 appimage rename failed!" >&2
+    echo "client-$1 appimage rename failed!" >&2
+    return 1
+  fi
+}
+
+# $1 - FCMP type
+# $2 - FCMP configuration name
+# $3 - FCMP part of the AppImage name as produced by linuxdeploy
+# $4 - Extra configure options
+fcmp_appimage() {
+  if ! mkdir "AppDir/fcmp-$1" || ! mkdir "build/fcmp-$1" ; then
+    echo "Failed to create fcmp-$1 directories!" >&2
+    return 1
+  fi
+
+  cd "build/fcmp-$1"
+  if ! meson setup -Dappimage=true -Dprefix=/usr -Ddefault_library=static -Dserver=disabled  -Dclients=[] -Dfcmp=$2 -Dtools=[] $4 "${SRC_ROOT}"
+  then
+    echo "fcmp-$1 setup with meson failed!" >&2
+    return 1
+  fi
+
+  if ! DESTDIR="${BUILD_ROOT}/AppDir/fcmp-$1" ninja install ; then
+    echo "fcmp-$1 build with ninja failed!" >&2
+    return 1
+  fi
+
+  cd "${BUILD_ROOT}"
+  if ! tools/linuxdeploy-x86_64.AppImage --appdir "AppDir/fcmp-$1" --output appimage
+  then
+    echo "fcmp-$1 image build with linuxdeploy failed!" >&2
+    return 1
+  fi
+  if ! mv "Freeciv_modpack_installer$3-x86_64.AppImage" "Freeciv-fcmp-$1-${FCVER}-x86_64.AppImage" ; then
+    echo "fcmp-$1 appimage rename failed!" >&2
     return 1
   fi
 }
@@ -137,16 +171,21 @@ if ! mv "Freeciv_server-x86_64.AppImage" "Freeciv-server-${FCVER}-x86_64.AppImag
   exit 1
 fi
 
-if ! client_appimage gtk4    gtk4    ""        ||
-   ! client_appimage sdl2    sdl2    "_(SDL2)" ||
-   ! client_appimage qt6     qt      "_(Qt)"   ||
-   ! client_appimage gtk3.22 gtk3.22 ""        ||
+if ! client_appimage gtk4    gtk4    ""                       ||
+   ! client_appimage sdl2    sdl2    "_(SDL2)" "-Daudio=sdl2" ||
+   ! client_appimage qt6     qt      "_(Qt)"                  ||
+   ! client_appimage gtk3.22 gtk3.22 ""                       ||
    ! client_appimage sdl3    sdl3    "_(SDL3)" "-Daudio=none"
 then
   exit 1
 fi
 
 if ! ruledit_appimage qt6
+then
+  exit 1
+fi
+
+if ! fcmp_appimage gtk4    gtk4    "_(gtk4)"
 then
   exit 1
 fi

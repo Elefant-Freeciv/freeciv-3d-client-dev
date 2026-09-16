@@ -514,10 +514,10 @@ static void remove_item_from_worklist(struct widget *item)
 
 /**********************************************************************//**
   Swap worklist entries DOWN.
-  Fuction swap current element with next element of worklist.
+  Function swap current element with next element of worklist.
 
   If item is last widget or there is only one widget on widgets list
-  fuction remove this widget from widget list and target from worklist
+  function remove this widget from widget list and target from worklist
 
   In City mode, when item is first worklist element, function make
   change production (currently building is moved to first element of worklist
@@ -570,9 +570,9 @@ static void swap_item_down_from_worklist(struct widget *item)
 
 /**********************************************************************//**
   Swap worklist entries UP.
-  Fuction swap current element with prev. element of worklist.
+  Function swap current element with prev. element of worklist.
 
-  If item is first widget on widgets list fuction remove this widget
+  If item is first widget on widgets list function remove this widget
   from widget list and target from worklist (global mode)
   or from production (city mode)
 
@@ -659,7 +659,7 @@ static int worklist_editor_item_callback(struct widget *pwidget)
 
 /**********************************************************************//**
   Add global worklist to city worklist starting from last free entry.
-  Add only avilable targets in current game state.
+  Add only available targets in current game state.
   If global worklist have more targets that city worklist have free
   entries then we adding only first part of global worklist.
 **************************************************************************/
@@ -685,7 +685,7 @@ static void add_global_worklist(struct widget *pwidget)
   for (count = 0 ; count < worklist_length(pworklist); count++) {
     struct widget *buf;
 
-    /* Global worklist can have targets unavilable in current state of game
+    /* Global worklist can have targets unavailable in current state of game
        then we must remove those targets from new city worklist */
     if (!can_city_build_later(&(wld.map), editor->pcity, &pworklist->entries[count])) {
       continue;
@@ -740,7 +740,7 @@ static void add_global_worklist(struct widget *pwidget)
 /**********************************************************************//**
   Clear city worklist and copy here global worklist.
   Copy only available targets in current game state.
-  If all targets are unavilable then leave city worklist untouched.
+  If all targets are unavailable then leave city worklist untouched.
 **************************************************************************/
 static void set_global_worklist(struct widget *pwidget)
 {
@@ -763,7 +763,7 @@ static void set_global_worklist(struct widget *pwidget)
   wl_count = 0;
   /* copy global worklist to city worklist */
   for (count = 0; count < worklist_length(pworklist); count++) {
-    /* global worklist can have targets unavilable in current state of game
+    /* global worklist can have targets unavailable in current state of game
        then we must remove those targets from new city worklist */
     if (!can_city_build_later(&(wld.map), editor->pcity, &pworklist->entries[count])) {
       continue;
@@ -1414,13 +1414,15 @@ void popup_worklist_editor(struct city *pcity, struct global_worklist *gwl)
   pstr->bgcol = (SDL_Color) {0, 0, 0, 0};
 
   improvement_iterate(pimprove) {
-    can_build = can_player_build_improvement_now(client.conn.playing, pimprove);
+    can_build = can_player_build_improvement_now(client.conn.playing, pimprove,
+                                                 RPT_CERTAIN);
     can_eventually_build =
         can_player_build_improvement_later(client.conn.playing, pimprove);
 
     /* If there's a city, can the city build the improvement? */
     if (pcity) {
-      can_build = can_build && can_city_build_improvement_now(pcity, pimprove);
+      can_build = can_build && can_city_build_improvement_now(pcity, pimprove,
+                                                              RPT_CERTAIN);
       can_eventually_build = can_eventually_build
         && can_city_build_improvement_later(pcity, pimprove);
     }
@@ -1583,13 +1585,14 @@ void popup_worklist_editor(struct city *pcity, struct global_worklist *gwl)
   /* ------------------------------ */
 
   unit_type_iterate(un) {
-    can_build = can_player_build_unit_now(client.conn.playing, un);
-    can_eventually_build =
-        can_player_build_unit_later(client.conn.playing, un);
+    can_build = can_player_build_unit_now(client.conn.playing, un, RPT_CERTAIN);
+    can_eventually_build
+      = can_player_build_unit_later(client.conn.playing, un);
 
     /* If there's a city, can the city build the unit? */
     if (pcity) {
-      can_build = can_build && can_city_build_unit_now(nmap, pcity, un);
+      can_build = can_build && can_city_build_unit_now(nmap, pcity, un,
+                                                       RPT_CERTAIN);
       can_eventually_build = can_eventually_build
         && can_city_build_unit_later(nmap, pcity, un);
     }

@@ -73,6 +73,17 @@ option('server',
        value: 'enabled',
        description: 'What kind of server should be build, if any')
 
+option('aimodules',
+       type: 'array',
+       choices: ['classic', 'tex', 'stub'],
+       value: ['classic', 'tex'],
+       description: 'AI modules to include to the server')
+
+option('dynaimod',
+       type: 'boolean',
+       value: false,
+       description: 'Support dynamically loadable AI modules')
+
 option('appimage',
        type: 'boolean',
        value: false,

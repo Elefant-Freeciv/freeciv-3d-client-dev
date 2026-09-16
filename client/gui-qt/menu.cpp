@@ -38,6 +38,7 @@
 #include "unit.h"
 
 // client
+#include "audio.h"
 #include "connectdlg_common.h"
 #include "control.h"
 #include "helpdata.h"
@@ -1005,6 +1006,7 @@ void mr_menu::setup_menus()
   act = sub_menu->addAction(_("Save Options on Exit"));
   act->setCheckable(true);
   act->setChecked(gui_options.save_options_on_exit);
+  connect(act, &QAction::triggered, this, &mr_menu::save_options_exit);
   main_menu->addSeparator();
   act = main_menu->addAction(_("Save Game"));
   act->setShortcut(QKeySequence(tr("Ctrl+s")));
@@ -1019,9 +1021,11 @@ void mr_menu::setup_menus()
   connect(act, &QAction::triggered, this, &mr_menu::save_image);
   main_menu->addSeparator();
   act = main_menu->addAction(_("Volume Up"));
+  menu_list.insert(AUDIO, act);
   act->setShortcut(QKeySequence(tr(">")));
   connect(act, &QAction::triggered, this, &mr_menu::volume_up);
   act = main_menu->addAction(_("Volume Down"));
+  menu_list.insert(AUDIO, act);
   act->setShortcut(QKeySequence(tr("<")));
   connect(act, &QAction::triggered, this, &mr_menu::volume_down);
   main_menu->addSeparator();
@@ -1700,6 +1704,11 @@ void mr_menu::setup_menus()
     slot_help(HELP_COMBAT_ITEM);
   });
 
+  act = main_menu->addAction(Q_(HELP_COUNTER_ITEM));
+  QObject::connect(act, &QAction::triggered, [this]() {
+    slot_help(HELP_COUNTER_ITEM);
+  });
+
   act = main_menu->addAction(Q_(HELP_ZOC_ITEM));
   QObject::connect(act, &QAction::triggered, [this]() {
     slot_help(HELP_ZOC_ITEM);
@@ -1976,11 +1985,11 @@ void mr_menu::update_airlift_menu()
   unit_type_iterate(utype) {
     utype_id = utype_index(utype);
 
-    if (!can_player_build_unit_now(pplayer, utype)
+    if (!can_player_build_unit_now(pplayer, utype, RPT_CERTAIN)
         || !utype_can_do_action(utype, ACTION_AIRLIFT)) {
       continue;
     }
-    if (!can_player_build_unit_now(pplayer, utype)
+    if (!can_player_build_unit_now(pplayer, utype, RPT_CERTAIN)
         && !has_player_unit_type(utype_id)) {
       continue;
     }
@@ -2167,6 +2176,9 @@ void mr_menu::menus_sensitive()
         } else {
           i.value()->setText(QString(_("Top Cities")));
         }
+        break;
+      case AUDIO:
+        i.value()->setEnabled(!audio_is_dummy_plugin());
         break;
       default:
         break;
@@ -3809,6 +3821,14 @@ void mr_menu::messages_options()
 void mr_menu::save_options_now()
 {
   options_save(nullptr);
+}
+
+/**********************************************************************//**
+  Menu Save Options On Exit
+**************************************************************************/
+void mr_menu::save_options_exit()
+{
+  gui_options.save_options_on_exit = !gui_options.save_options_on_exit;
 }
 
 /**********************************************************************//**

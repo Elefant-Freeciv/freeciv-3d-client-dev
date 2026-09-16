@@ -15,11 +15,17 @@
 
 #define DATASUBDIR "@DATASUBDIR@"
 
-#define AI_MOD_DEFAULT "classic"
+#mesondefine AI_MOD_DEFAULT
 
 #mesondefine AI_MOD_STATIC_CLASSIC
 #mesondefine AI_MOD_STATIC_TEX
 #mesondefine AI_MOD_STATIC_STUB
+
+/* Enable AI modules */
+#mesondefine AI_MODULES
+
+/* Directory to search AI modules from */
+#mesondefine AI_MODULEDIR
 
 #mesondefine DEFAULT_SOCK_PORT
 
@@ -68,7 +74,10 @@
 /* Enable audio */
 #mesondefine AUDIO_SDL
 
-/* Use SDL3_mixer */
+/* Use SDL2_mixer */
+#mesondefine AUDIO_SDL2
+
+/* Use sdl3-mixer */
 #mesondefine AUDIO_SDL3
 
 /* Native language support enabled */

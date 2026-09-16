@@ -124,7 +124,6 @@ meson setup .. \
   -Dtools=ruledit,manual,ruleup \
   -Dclients=gtk3.22,sdl2,gtk4,qt,stub,gtk4x \
   -Dfcmp=gtk3,gtk4,qt,cli \
-  -Dfollowtag=macos \
   -Dprefix=${HOME}/freeciv/mac-meson \
   || (let meson_exit_status=$? \
       && echo "meson.log:" \
@@ -141,31 +140,28 @@ cd ${HOME}/freeciv/mac-meson/bin/
 echo "Freeciv server autogame successful!"
 ;;
 
-"clang_debug")
+"clang-debug")
 # Configure and build Freeciv
 mkdir build
 cd build
-../autogen.sh \
- CC="clang" \
- CXX="clang++" \
- CFLAGS="-Wno-error" \
- --enable-ack-legacy \
- --enable-debug \
- --enable-sys-tolua-cmd \
- --disable-fcdb \
- --with-qtver=qt6 \
- --enable-client=gtk3.22,qt,sdl2,gtk4,stub \
- --enable-fcmp=cli,gtk3,qt,gtk4 \
- --enable-fcdb=sqlite3,mysql,postgres,odbc \
- --enable-freeciv-manual \
- --enable-ai-static=classic,tex,stub \
- --prefix=${HOME}/freeciv/clang \
- || (let config_exit_status=$? \
-     && echo "Config exit status: $config_exit_status" \
-     && cat config.log \
-     && exit $config_exit_status)
-make -s -j$(nproc)
-make install
+
+CC="clang" \
+CXX="clang++" \
+meson setup .. \
+ -Ddebug=true \
+ -Dqtver=qt6 \
+ -Dclients=gtk3.22,gtk4,qt,sdl2,stub \
+ -Dfcmp=gtk3,gtk4,qt,cli \
+ -Dfcdb=sqlite3,mariadb,odbc \
+ -Daimodules=classic,tex,stub \
+ -Dprefix=${HOME}/freeciv/clang \
+ || (let meson_exit_status=$? \
+      && echo "meson.log:" \
+      && cat meson-logs/meson-log.txt \
+      && exit ${meson_exit_status})
+ninja
+ninja install
+echo "Freeciv build successful!"
 ;;
 
 tcc)
@@ -199,11 +195,23 @@ emsdk)
   # Outside source tree
   cd ..
 
+  if ! mkdir bin || ! mkdir tolua ; then
+    echo "Failed to create tolua creation dirs!" >&2
+    exit 1
+  fi
+
+  ( cd tolua
+    if ! ${SRCROOT}/scripts/build_tolua.sh ../bin ; then
+      exit 1
+    fi
+  )
+
   if ! ${SRCROOT}/platforms/emscripten/emssetup.sh emsdk ; then
     exit 1
   fi
 )
 
+export PATH="${PATH}:$(cd ../bin; pwd)"
 mkdir build
 cd build
 ../platforms/emscripten/emsbuild.sh "../../emsdk"

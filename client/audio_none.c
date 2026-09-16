@@ -26,6 +26,8 @@
 
 #include "audio_none.h"
 
+static double none_audio_volume;
+
 /**********************************************************************//**
   Clean up
 **************************************************************************/
@@ -78,6 +80,22 @@ static void none_audio_resume(void)
 }
 
 /**********************************************************************//**
+  Adjust volume
+**************************************************************************/
+static void none_audio_set_volume(double volume)
+{
+  none_audio_volume = volume;
+}
+
+/**********************************************************************//**
+  Get the volume.
+**************************************************************************/
+static double none_audio_get_volume(void)
+{
+  return none_audio_volume;
+}
+
+/**********************************************************************//**
   Initialize.
 **************************************************************************/
 static bool none_audio_init(struct audio_plugin *self)
@@ -97,6 +115,7 @@ void audio_none_init(void)
   sz_strlcpy(self.name, "none");
   sz_strlcpy(self.descr, "/dev/null plugin");
   self.initialized = FALSE;
+  self.dummy = TRUE;
   self.init = none_audio_init;
   self.shutdown = none_audio_shutdown;
   self.stop = none_audio_stop;
@@ -104,5 +123,9 @@ void audio_none_init(void)
   self.play = none_audio_play;
   self.pause = none_audio_pause;
   self.resume = none_audio_resume;
+  self.set_volume = none_audio_set_volume;
+  self.get_volume = none_audio_get_volume;
   audio_add_plugin(&self);
+
+  none_audio_volume = 1.0;
 }

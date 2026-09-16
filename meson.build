@@ -3,6 +3,18 @@ project('freeciv', ['c'],
         version : run_command('fc_version', check : true).stdout(),
         default_options: ['warning_level=1'])
 
+if get_option('audio') == 'sdl2' and get_option('clients').contains('sdl3')
+  error('''sdl3-client and sdl2 audio cannot be enabled simultaneously.
+To build both sdl2-client and sdl3-client with audio support,
+use separate build dirs.''')
+endif
+
+if get_option('audio') == 'sdl3' and get_option('clients').contains('sdl2')
+  error('''sdl2-client and sdl3 audio cannot be enabled simultaneously.
+To build both sdl2-client and sdl3-client with audio support,
+use separate build dirs.''')
+endif
+
 c_compiler = meson.get_compiler('c')
 
 b_root = meson.project_build_root()
@@ -226,6 +238,18 @@ else
   priv_conf_data.set('LOCALEDIR', join_paths(localeprefix, get_option('localedir')))
 endif
 
+if meson.is_cross_build()
+  cross_inc_str = meson.get_external_property('cross_inc_path', '')
+  cross_inc_path = [cross_inc_str]
+  cross_lib_path = [meson.get_external_property('cross_lib_path', '')]
+  crosser = meson.get_external_property('crosser', false)
+else
+  cross_inc_str = ''
+  cross_inc_path = []
+  cross_lib_path = []
+  crosser = false
+endif
+
 server_type = get_option('server')
 
 if server_type == 'freeciv-web'
@@ -240,35 +264,56 @@ if server_type == 'disabled'
   pub_conf_data.set('FREECIV_AI_MOD_LAST', 1)
 
   priv_conf_data.set('AI_MOD_STATIC_STUB', 1)
+  priv_conf_data.set('AI_MOD_DEFAULT', '"stub"')
+  dynai_dep = []
 else
-  pub_conf_data.set('FREECIV_AI_MOD_LAST', 2)
+  aimodcount = 0
+  aisrc = []
 
-  priv_conf_data.set('AI_MOD_STATIC_CLASSIC', 1)
-  priv_conf_data.set('AI_MOD_STATIC_TEX', 1)
-endif
+  if get_option('dynaimod')
+    priv_conf_data.set('AI_MODULES', 1)
+    priv_conf_data.set('AI_MODULEDIR',
+                       '"' + join_paths(get_option('libdir'), 'fcai') + '"')
+    dynai_dep = c_compiler.find_library('ltdl', dirs: cross_lib_path)
 
-if meson.is_cross_build()
-  cross_inc_str = meson.get_external_property('cross_inc_path', '')
-  cross_inc_path = [cross_inc_str]
-  cross_lib_path = [meson.get_external_property('cross_lib_path', '')]
-  crosser = meson.get_external_property('crosser', false)
-
-  # emscripten build is always cross-build, so check it only here
-  if c_compiler.compiles(
-'''#ifndef __EMSCRIPTEN__
-  error fail
-#endif''',
-  name: 'emscripten')
-    emscripten = true
+    # Reserve slots for two dynamic modules
+    aimodcount = aimodcount + 2
   else
-    emscripten = false
+    dynai_dep = []
   endif
-else
-  cross_inc_str = ''
-  cross_inc_path = []
-  cross_lib_path = []
-  crosser = false
-  emscripten = false
+
+  if get_option('aimodules').contains('classic')
+    priv_conf_data.set('AI_MOD_STATIC_CLASSIC', 1)
+    priv_conf_data.set('AI_MOD_DEFAULT', '"classic"')
+    aimodcount = aimodcount + 1
+    aisrc = [ aisrc, 'ai/classic/classicai.c' ]
+  endif
+  if get_option('aimodules').contains('tex')
+    priv_conf_data.set('AI_MOD_STATIC_TEX', 1)
+    if aimodcount == 0
+      priv_conf_data.set('AI_MOD_DEFAULT', '"tex"')
+    endif
+    aimodcount = aimodcount + 1
+    aisrc = [ aisrc,
+              'ai/tex/texai.c',
+              'ai/tex/texaicity.c',
+              'ai/tex/texaimsg.c',
+              'ai/tex/texaiplayer.c',
+              'ai/tex/texaiworld.c' ]
+  endif
+  if get_option('aimodules').contains('stub')
+    priv_conf_data.set('AI_MOD_STATIC_STUB', 1)
+    if aimodcount == 0
+      priv_conf_data.set('AI_MOD_DEFAULT', '"stub"')
+    endif
+    aimodcount = aimodcount + 1
+    aisrc = [ aisrc, 'ai/stub/stubai.c' ]
+  endif
+
+  if aimodcount == 0
+    error('No AI modules enabled, but at least one needed')
+  endif
+  pub_conf_data.set('FREECIV_AI_MOD_LAST', aimodcount)
 endif
 
 if get_option('appimage')
@@ -666,10 +711,13 @@ int main(void) { int *var = nullptr; return 0; }''',
   pub_conf_data.set('FREECIV_HAVE_CXX_NULLPTR', 1)
 endif
 
-if emscripten
+if host_system == 'emscripten'
   icu_dep = []
   zlib_dep = []
   syslua = 'false'
+  ems_suffix = 'html'
+
+  priv_conf_data.set('ALWAYS_ROOT', 1)
 
   emscripten_use_args = [
      '-s', 'USE_ICU=1',
@@ -683,6 +731,8 @@ if emscripten
   add_global_link_arguments(
      emscripten_use_args,
      '-s', 'TOTAL_MEMORY=64MB',
+     '-sSTACK_SIZE=131072',
+     '-sASYNCIFY',
      language : [ 'c', 'cpp'])
 else
   zlib_dep = c_compiler.find_library('z', dirs: cross_lib_path)
@@ -694,6 +744,8 @@ else
   if syslua != 'false'
     lua_dep_tmp = dependency('lua-5.5', 'lua-55', 'lua55', 'lua5.5', required:false)
   endif
+
+  ems_suffix = []
 endif
 
 # Set unconditionally, as it was checked as hard requirement
@@ -744,51 +796,6 @@ int main(void) { MagickWandGenesis(); }''',
   endif
 else
   mw_dep = []
-endif
-
-if syslua != 'false' and lua_dep_tmp.found()
-  lua_inc_path = []
-  lua_sources = []
-  lua_dep = lua_dep_tmp
-elif syslua == 'true'
-  error('Syslua requested but not found.')
-else
-  lua_inc_path = 'dependencies/lua-5.5/src'
-  lua_sources = [
-    'dependencies/lua-5.5/src/lapi.c',
-    'dependencies/lua-5.5/src/lauxlib.c',
-    'dependencies/lua-5.5/src/lbaselib.c',
-    'dependencies/lua-5.5/src/lcode.c',
-    'dependencies/lua-5.5/src/lcorolib.c',
-    'dependencies/lua-5.5/src/lctype.c',
-    'dependencies/lua-5.5/src/ldblib.c',
-    'dependencies/lua-5.5/src/ldebug.c',
-    'dependencies/lua-5.5/src/ldo.c',
-    'dependencies/lua-5.5/src/ldump.c',
-    'dependencies/lua-5.5/src/lfunc.c',
-    'dependencies/lua-5.5/src/lgc.c',
-    'dependencies/lua-5.5/src/linit.c',
-    'dependencies/lua-5.5/src/liolib.c',
-    'dependencies/lua-5.5/src/llex.c',
-    'dependencies/lua-5.5/src/lmathlib.c',
-    'dependencies/lua-5.5/src/lmem.c',
-    'dependencies/lua-5.5/src/loadlib.c',
-    'dependencies/lua-5.5/src/lobject.c',
-    'dependencies/lua-5.5/src/lopcodes.c',
-    'dependencies/lua-5.5/src/loslib.c',
-    'dependencies/lua-5.5/src/lparser.c',
-    'dependencies/lua-5.5/src/lstate.c',
-    'dependencies/lua-5.5/src/lstring.c',
-    'dependencies/lua-5.5/src/lstrlib.c',
-    'dependencies/lua-5.5/src/ltable.c',
-    'dependencies/lua-5.5/src/ltablib.c',
-    'dependencies/lua-5.5/src/ltm.c',
-    'dependencies/lua-5.5/src/lundump.c',
-    'dependencies/lua-5.5/src/lutf8lib.c',
-    'dependencies/lua-5.5/src/lvm.c',
-    'dependencies/lua-5.5/src/lzio.c',
-  ]
-  lua_dep = dependency('', required:false)
 endif
 
 if c_compiler.compiles('''#include <netinet/in.h>
@@ -869,7 +876,7 @@ if get_option('audio') == 'sdl2' or get_option('clients').contains('sdl2')
                     c_compiler.find_library('SDL2main', dirs: cross_lib_path),
                     dependency('SDL2')]
   else
-    if emscripten
+    if host_system == 'emscripten'
       emscripten_sdl2_args = [
         '-s', 'USE_SDL=2'
       ]
@@ -881,6 +888,7 @@ if get_option('audio') == 'sdl2' or get_option('clients').contains('sdl2')
       if get_option('clients').contains('sdl2')
         emscripten_sdl2_args += [
           '-s', 'USE_SDL_IMAGE=2',
+          '-s', 'SDL2_IMAGE_FORMATS=["png"]',
           '-s', 'USE_SDL_TTF=2',
           '-s', 'USE_SDL_GFX=2'
         ]
@@ -900,7 +908,7 @@ if get_option('audio') == 'sdl3' or get_option('clients').contains('sdl3')
     sdl3main_dep = [c_compiler.find_library('mingw32', dirs: cross_lib_path),
                     dependency('sdl3')]
   else
-    if emscripten
+    if host_system == 'emscripten'
       emscripten_sdl3_args = [
         '-s', 'USE_SDL=3'
       ]
@@ -927,8 +935,8 @@ if get_option('audio') == 'sdl3' or get_option('clients').contains('sdl3')
 endif
 
 if qtver == 'qt6x'
-  qt_minver = '0x060800'
-  qt_vercheck = '6.8'
+  qt_minver = '0x060a00'
+  qt_vercheck = '6.10'
   qt_modename = 'Qt6x'
   add_global_arguments('-DQT_DISABLE_DEPRECATED_BEFORE=' + qt_minver, language : 'cpp')
   priv_conf_data.set('FC_QT6X_MODE', 1)
@@ -941,10 +949,22 @@ else
   qt_opts = 'cpp_std=c++17'
 endif
 
+qt_mod = import('qt6')
+
+if cxx_build and cxx_compiler.has_argument('-Wno-sfinae-incomplete')
+  qt_si_dep = dependency('Qt6', modules: ['Core', 'Gui', 'Widgets'],
+                         version: '< 6.11',
+                         required: false)
+
+  if qt_si_dep.found()
+    add_global_arguments('-Wno-sfinae-incomplete', language : 'cpp')
+  endif
+endif
+
 if get_option('audio') != 'none'
   priv_conf_data.set('AUDIO_SDL', 1)
 
-  if emscripten
+  if host_system == 'emscripten'
     audio_dep = []
   elif get_option('audio') == 'sdl3'
     audio_sdl3_dep = dependency('sdl3-mixer')
@@ -953,6 +973,7 @@ if get_option('audio') != 'none'
   else
     audio_sdl2_dep = dependency('SDL2_mixer')
     audio_dep = [sdl2main_dep, audio_sdl2_dep]
+    priv_conf_data.set('AUDIO_SDL2', 1)
   endif
 
   audio_sdl_src = 'client/audio_sdl.c'
@@ -989,7 +1010,7 @@ else
   gettext_dep = []
 endif
 
-if emscripten
+if host_system == 'emscripten'
   curl_dep = []
   m_dep = []
 else
@@ -997,7 +1018,7 @@ else
   m_dep = c_compiler.find_library('m', dirs: cross_lib_path)
 endif
 
-if not emscripten
+if host_system != 'emscripten'
   if c_compiler.compiles(net_incl + '''
 #include <stddef.h>
 #include <curl/curl.h>
@@ -1011,10 +1032,12 @@ int main(void) { curl_mime *mime = curl_mime_init(NULL); }''',
   endif
 endif
 
-if not emscripten
-  sqlite3_dep = c_compiler.find_library('sqlite3', dirs: cross_lib_path)
-else
+if host_system == 'emscripten'
   sqlite3_dep = []
+elif not get_option('fcdb').contains('sqlite3') and get_option('fcmp') == []
+  sqlite3_dep = []
+else
+  sqlite3_dep = c_compiler.find_library('sqlite3', dirs: cross_lib_path)
 endif
 
 fcdb = false
@@ -1053,7 +1076,7 @@ if get_option('fcdb').contains('odbc')
 endif
 
 if fcdb
-  if emscripten
+  if host_system == 'emscripten'
     error('FCDB not supported on emscripten builds.')
   endif
   priv_conf_data.set('HAVE_FCDB', 1)
@@ -1144,7 +1167,15 @@ foreach manp : man_pages
   man_conf_data.set('DATASUBDIR', '"' + datasubdir + '"')
   configure_file(input : 'doc/man/' + manp + '.6.in',
                  output : manp + '.6',
-                 configuration : man_conf_data)
+                 configuration : man_conf_data,
+                 install_dir: join_paths(get_option('mandir'), 'man6'))
+endforeach
+
+foreach manp : man_links
+  install_data(
+    join_paths('doc/man/', manp + '.6'),
+    install_dir : join_paths(get_option('mandir'), 'man6')
+    )
 endforeach
 
 add_global_arguments('-DHAVE_CONFIG_H',
@@ -1161,6 +1192,14 @@ gen_packets_args = get_option('gen-packets-args')
 python_exe = find_program(get_option('python'))
 sh_exe = find_program('sh')
 gzip_exe = find_program('gzip')
+
+if syslua != 'false' and lua_dep_tmp.found()
+  lua_inc_path = []
+elif syslua == 'true'
+  error('Syslua requested but not found.')
+else
+  lua_inc_path = 'dependencies/lua-5.5/src'
+endif
 
 common_inc = include_directories(cross_inc_path,
   lua_inc_path, 'dependencies/luasql/src', 'dependencies/tinycthread',
@@ -1291,9 +1330,58 @@ else
   tinycthr_files = files()
 endif
 
+if syslua != 'false' and lua_dep_tmp.found()
+  lua_dep = lua_dep_tmp
+  fc_lua = []
+else
+  lua_c_flags = []
+  foreach arg : ['-Wno-implicit-fallthrough', '-Wno-cast-align' ]
+    if c_compiler.has_argument(arg)
+      lua_c_flags = [ lua_c_flags, arg ]
+    endif
+  endforeach
+
+  fc_lua = static_library('fc_lua',
+    'dependencies/lua-5.5/src/lapi.c',
+    'dependencies/lua-5.5/src/lauxlib.c',
+    'dependencies/lua-5.5/src/lbaselib.c',
+    'dependencies/lua-5.5/src/lcode.c',
+    'dependencies/lua-5.5/src/lcorolib.c',
+    'dependencies/lua-5.5/src/lctype.c',
+    'dependencies/lua-5.5/src/ldblib.c',
+    'dependencies/lua-5.5/src/ldebug.c',
+    'dependencies/lua-5.5/src/ldo.c',
+    'dependencies/lua-5.5/src/ldump.c',
+    'dependencies/lua-5.5/src/lfunc.c',
+    'dependencies/lua-5.5/src/lgc.c',
+    'dependencies/lua-5.5/src/linit.c',
+    'dependencies/lua-5.5/src/liolib.c',
+    'dependencies/lua-5.5/src/llex.c',
+    'dependencies/lua-5.5/src/lmathlib.c',
+    'dependencies/lua-5.5/src/lmem.c',
+    'dependencies/lua-5.5/src/loadlib.c',
+    'dependencies/lua-5.5/src/lobject.c',
+    'dependencies/lua-5.5/src/lopcodes.c',
+    'dependencies/lua-5.5/src/loslib.c',
+    'dependencies/lua-5.5/src/lparser.c',
+    'dependencies/lua-5.5/src/lstate.c',
+    'dependencies/lua-5.5/src/lstring.c',
+    'dependencies/lua-5.5/src/lstrlib.c',
+    'dependencies/lua-5.5/src/ltable.c',
+    'dependencies/lua-5.5/src/ltablib.c',
+    'dependencies/lua-5.5/src/ltm.c',
+    'dependencies/lua-5.5/src/lundump.c',
+    'dependencies/lua-5.5/src/lutf8lib.c',
+    'dependencies/lua-5.5/src/lvm.c',
+    'dependencies/lua-5.5/src/lzio.c',
+    c_args: lua_c_flags
+  )
+
+  lua_dep = []
+endif
+
 fc_deps = static_library('fc_dependencies',
   'dependencies/cvercmp/cvercmp.c',
-  lua_sources,
   'dependencies/tolua-5.2/src/lib/tolua_event.c',
   'dependencies/tolua-5.2/src/lib/tolua_is.c',
   'dependencies/tolua-5.2/src/lib/tolua_map.c',
@@ -1302,6 +1390,7 @@ fc_deps = static_library('fc_dependencies',
   fcdb_src, tinycthr_files,
   sources: [verhdr],
   include_directories : common_inc,
+  link_with: fc_lua,
   dependencies: [ lua_dep, fcdb_dep ]
   )
 
@@ -1520,12 +1609,7 @@ ais = static_library('fc_ai',
 else
 
 ais = static_library('fc_ai',
-  'ai/classic/classicai.c',
-  'ai/tex/texai.c',
-  'ai/tex/texaicity.c',
-  'ai/tex/texaimsg.c',
-  'ai/tex/texaiplayer.c',
-  'ai/tex/texaiworld.c',
+  aisrc,
   'ai/default/daiair.c',
   'ai/default/daiactions.c',
   'ai/default/daicity.c',
@@ -1542,6 +1626,7 @@ ais = static_library('fc_ai',
   'ai/default/daimilitary.c',
   'ai/default/daiparadrop.c',
   'ai/default/daiplayer.c',
+  'ai/default/daisanity.c',
   'ai/default/daisettler.c',
   'ai/default/daitech.c',
   'ai/default/daitools.c',
@@ -1593,6 +1678,7 @@ server_lib = static_library('fc_server',
   'server/scripting/api_server_notify.c',
   'server/scripting/script_fcdb.c',
   'server/scripting/script_server.c',
+  'server/aahand.c',
   'server/actiontools.c',
   'server/aiiface.c',
   'server/animals.c',
@@ -1636,7 +1722,7 @@ server_lib = static_library('fc_server',
   sources: [ verhdr, pack_server,
              tolua.process('server/scripting/tolua_fcdb.pkg',
                            'server/scripting/tolua_server.pkg')],
-  dependencies: lua_dep
+  dependencies: [ lua_dep, dynai_dep ]
   )
 
 endif
@@ -1646,6 +1732,7 @@ if server_type != 'disabled'
     'server/srv_entrypoint.c',
     servericon,
     include_directories: server_inc,
+    sources: [verhdr],
     link_with: [server_lib, common_lib, ais],
     dependencies: [m_dep, net_dep, readline_dep, gettext_dep, fcdb_dep,
                    mw_extra_dep],
@@ -3359,20 +3446,6 @@ foreach iconsize : i
                  install_dir : join_paths(get_option('datadir'), 'icons/hicolor', iconsize, 'apps'))
 endforeach
 
-foreach manp : man_pages
-  install_data(
-    join_paths(b_root, manp + '.6'),
-    install_dir : join_paths(get_option('mandir'), 'man6')
-    )
-endforeach
-
-foreach manp : man_links
-  install_data(
-    join_paths('doc/man/', manp + '.6'),
-    install_dir : join_paths(get_option('mandir'), 'man6')
-    )
-endforeach
-
 gtk322_dep = dependency('gtk+-3.0', version : '>= 3.22', required : false)
 gtk4_dep = dependency('gtk4', version : '>= 4.0.0', required : false)
 gtk5_dep = dependency('gtk4', version : '>= 4.14.0', required : false)
@@ -3648,7 +3721,6 @@ if gtk4_theme
                              'freeciv/themes/gtk4/Freeciv/gtk-4.0'))
 endif
 
-qt_mod = import('qt6')
 qt_dep = dependency('Qt6', modules: ['Core', 'Gui', 'Widgets'],
                     version: '>= ' + qt_vercheck,
                     required: false)
@@ -3744,6 +3816,7 @@ install_data(
   'data/themes/gui-qt/icons/city-left.png',
   'data/themes/gui-qt/icons/city-right.png',
   'data/themes/gui-qt/icons/city-switch.png',
+  'data/themes/gui-qt/icons/clean.png',
   'data/themes/gui-qt/icons/close.png',
   'data/themes/gui-qt/icons/cmax.png',
   'data/themes/gui-qt/icons/cmin.png',
@@ -3773,12 +3846,12 @@ install_data(
   'data/themes/gui-qt/icons/paradrop.png',
   'data/themes/gui-qt/icons/plantforest.png',
   'data/themes/gui-qt/icons/plus.png',
-  'data/themes/gui-qt/icons/pollution.png',
   'data/themes/gui-qt/icons/preferences-other.png',
   'data/themes/gui-qt/icons/research.png',
   'data/themes/gui-qt/icons/resize.png',
   'data/themes/gui-qt/icons/sentry.png',
   'data/themes/gui-qt/icons/set_homecity.png',
+  'data/themes/gui-qt/icons/smiley.png',
   'data/themes/gui-qt/icons/transform.png',
   'data/themes/gui-qt/icons/units.png',
   'data/themes/gui-qt/icons/unload.png',
@@ -3905,7 +3978,7 @@ sdl2_gfx_cargs = []
 sdl2_image_dep = []
 sdl2_ttf_dep = []
 
-if not emscripten
+if host_system != 'emscripten'
   sdl2_gfx_dep = dependency('SDL2_gfx', required: false)
 
   if not sdl2_gfx_dep.found()
@@ -3914,8 +3987,8 @@ if not emscripten
     sdl2_gfx_cargs = '-DSDL2_GFX_FROM_TREE'
   endif
 
-  sdl2_image_dep = dependency('SDL2_image', required: false)
-  sdl2_ttf_dep = dependency('SDL2_ttf', required: false)
+  sdl2_image_dep = dependency('SDL2_image')
+  sdl2_ttf_dep = dependency('SDL2_ttf')
 endif
 
 executable('freeciv-sdl2',
@@ -3975,6 +4048,7 @@ executable('freeciv-sdl2',
                  sdl2_image_dep, sdl2_gfx_dep, sdl2_ttf_dep,
                  net_dep, gettext_dep, mw_extra_dep],
   link_with: client_common,
+  name_suffix: ems_suffix,
   install: true,
   win_subsystem: 'windows'
   )
@@ -4042,11 +4116,11 @@ sdl3_gfx_cargs = []
 sdl3_image_dep = []
 sdl3_ttf_dep = []
 
-if not emscripten
+if host_system != 'emscripten'
   sdl3_gfx_inc = include_directories('dependencies')
 
-  sdl3_image_dep = dependency('sdl3-image', required: false)
-  sdl3_ttf_dep = dependency('sdl3-ttf', required: false)
+  sdl3_image_dep = dependency('sdl3-image')
+  sdl3_ttf_dep = dependency('sdl3-ttf')
 endif
 
 executable('freeciv-sdl3',
@@ -4105,6 +4179,7 @@ executable('freeciv-sdl3',
                  sdl3_image_dep, sdl3_gfx_dep, sdl3_ttf_dep,
                  net_dep, gettext_dep, mw_extra_dep],
   link_with: client_common,
+  name_suffix: ems_suffix,
   install: true,
   win_subsystem: 'windows'
   )

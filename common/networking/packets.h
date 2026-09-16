@@ -18,13 +18,13 @@ extern "C" {
 #endif /* __cplusplus */
 
 /* utility */
-#include "shared.h"		/* MAX_LEN_ADDR */
+#include "shared.h"             /* MAX_LEN_ADDR */
 
 /* common */
 #include "diptreaty.h"
 #include "effects.h"
 #include "events.h"
-#include "improvement.h"	/* bv_imprs */
+#include "improvement.h"        /* bv_imprs */
 #include "player.h"
 #include "requirements.h"
 #include "spaceship.h"
@@ -82,22 +82,25 @@ struct packet_handlers {
 };
 
 void *get_packet_from_connection_raw(struct connection *pc,
-                                     enum packet_type *ptype);
+                                     enum packet_type *ptype,
+                                     bool recursed);
 
 #ifdef FREECIV_JSON_CONNECTION
-#define get_packet_from_connection(pc, ptype) get_packet_from_connection_json(pc, ptype)
+#define get_packet_from_connection(pc, ptype, recuirsed) \
+  get_packet_from_connection_json(pc, ptype)
 #else
-#define get_packet_from_connection(pc, ptype) get_packet_from_connection_raw(pc, ptype)
+#define get_packet_from_connection(pc, ptype, recursed) \
+  get_packet_from_connection_raw(pc, ptype, recursed)
 #endif
 
 void remove_packet_from_buffer(struct socket_packet_buffer *buffer);
 
 void send_attribute_block(const struct player *pplayer,
-			  struct connection *pconn);
+                          struct connection *pconn);
 void generic_handle_player_attribute_chunk(struct player *pplayer,
-					   const struct
-					   packet_player_attribute_chunk
-					   *chunk);
+                                           const struct
+                                           packet_player_attribute_chunk
+                                           *chunk);
 void packet_handlers_fill_initial(struct packet_handlers *phandlers);
 void packet_handlers_fill_capability(struct packet_handlers *phandlers,
                                      const char *capability);
@@ -114,8 +117,8 @@ void post_receive_packet_server_join_reply(struct connection *pconn,
                                            packet_server_join_reply *packet);
 
 void pre_send_packet_player_attribute_chunk(struct connection *pc,
-					    struct packet_player_attribute_chunk
-					    *packet);
+                                            struct packet_player_attribute_chunk
+                                            *packet);
 
 const struct packet_handlers *packet_handlers_initial(void);
 const struct packet_handlers *packet_handlers_get(const char *capability);
@@ -128,19 +131,19 @@ void packets_deinit(void);
 
 #define SEND_PACKET_START(packet_type) \
   unsigned char buffer[MAX_LEN_PACKET]; \
-  struct raw_data_out dout; \
+  struct raw_data_out d_out; \
   \
-  dio_output_init(&dout, buffer, sizeof(buffer)); \
-  dio_put_type_raw(&dout, pc->packet_header.length, 0); \
-  dio_put_type_raw(&dout, pc->packet_header.type, packet_type);
+  dio_output_init(&d_out, buffer, sizeof(buffer)); \
+  dio_put_type_raw(&d_out, pc->packet_header.length, 0); \
+  dio_put_type_raw(&d_out, pc->packet_header.type, packet_type);
 
 #define SEND_PACKET_END(packet_type) \
   { \
-    size_t size = dio_output_used(&dout); \
+    size_t size = dio_output_used(&d_out); \
     \
-    dio_output_rewind(&dout); \
-    dio_put_type_raw(&dout, pc->packet_header.length, size); \
-    fc_assert(!dout.too_short); \
+    dio_output_rewind(&d_out); \
+    dio_put_type_raw(&d_out, pc->packet_header.length, size); \
+    fc_assert(!d_out.too_short); \
     return send_packet_data(pc, buffer, size, packet_type); \
   }
 

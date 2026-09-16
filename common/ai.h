@@ -24,7 +24,7 @@ extern "C" {
  * structure below. When changing mandatory capability part, check that
  * there's enough reserved_xx pointers in the end of the structure for
  * taking to use without need to bump mandatory capability again. */
-#define FC_AI_MOD_CAPSTR "+Freeciv-3.3-ai-module-2023.Jul.18"
+#define FC_AI_MOD_CAPSTR "+Freeciv-3.4-ai-module-2025.Dec.24"
 
 /* Timers for all AI activities. Define it to get statistics about the AI. */
 #ifdef FREECIV_DEBUG
@@ -319,10 +319,13 @@ struct ai_type
     /* Called for player AI when revolution starts. */
     void (*revolution_start)(struct player *pplayer);
 
+    /* Called for player AI once a turn, in sanitychecking phase */
+    void (*check_sanity)(struct player *pplayer);
+
     /* These are here reserving space for future optional callbacks.
      * This way we don't need to change the mandatory capability of the AI module
      * interface when adding such callbacks, but existing modules just have these
-     * set to NULL. Optional capability should be set when taking one of these to use,
+     * set to nullptr. Optional capability should be set when taking one of these to use,
      * so that new modules know if the server is going to call these or is it too old
      * version to do so.
      * When mandatory capability then changes again, please add new reservations to

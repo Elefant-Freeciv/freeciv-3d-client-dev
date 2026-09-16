@@ -4,7 +4,7 @@ name   = _("Estonian")
 plural = _("?plural:Estonians")
 groups = "Modern", "European"
 legend = _("Estonia is a small country on the south shore of the eastern\
- Baltic Sea.  Its people and language are closely related to those of\
+ Baltic Sea. Its people and language are closely related to those of\
  Finland.")
 
 leaders = {
@@ -34,10 +34,36 @@ civilwar_nations = "finnish", "latvian"
 ; Removed "danish", "dutch": No relation?
 
 cities =
-  "Tallinn", "Tartu", "Narva", "Kohtla-Järve", "Pärnu",
-  "Viljandi", "Rakvere", "Valga", "Võru", "Sillamäe",
-  "Kuressaare", "Haapsalu", "Kiviõli", "Tapa", "Paide",
-  "Maardu", "Paldiski", "Türi", "Keila", "Elva",
-  "Kunda", "Põltsamaa", "Sindi", "Kärdla", "Tõrva",
-  "Otepää", "Kilingi-Nõmme", "Mustvee", "Antsla", "Mõisaküla",
-  "Suure-Jaani", "Kallaste", "Mustla"
+  "Tallinn",
+  "Tartu",
+  "Narva",
+  "Kohtla-Järve",
+  "Pärnu",
+  "Viljandi",
+  "Rakvere",
+  "Valga",
+  "Võru",
+  "Sillamäe",
+  "Kuressaare",
+  "Haapsalu",
+  "Kiviõli",
+  "Tapa",
+  "Paide",
+  "Maardu",
+  "Paldiski",
+  "Türi",
+  "Keila",
+  "Elva",
+  "Kunda",
+  "Põltsamaa",
+  "Sindi",
+  "Kärdla",
+  "Tõrva",
+  "Otepää",
+  "Kilingi-Nõmme",
+  "Mustvee",
+  "Antsla",
+  "Mõisaküla",
+  "Suure-Jaani",
+  "Kallaste",
+  "Mustla"

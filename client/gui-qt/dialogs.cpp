@@ -2077,12 +2077,23 @@ void popup_action_selection(struct unit *actor_unit,
              unit_name_translation(actor_unit),
              city_name_get(target_city));
   } else if (target_unit != nullptr) {
-    astr_set(&text,
-             // TRANS: Your Spy is ready to act against Roman Freight.
-             _("Your %s is ready to act against %s %s."),
-             unit_name_translation(actor_unit),
-             nation_adjective_for_player(unit_owner(target_unit)),
-             unit_name_translation(target_unit));
+    struct player *owner = unit_owner(target_unit);
+
+    if (owner != nullptr) {
+      astr_set(&text,
+               // TRANS: Your Spy is ready to act against Roman Freight.
+               _("Your %s is ready to act against %s %s."),
+               unit_name_translation(actor_unit),
+               nation_adjective_for_player(owner),
+               unit_name_translation(target_unit));
+    } else {
+      // Flagless target
+      astr_set(&text,
+               // TRANS: Your Spy is ready to act against Freight.
+               _("Your %s is ready to act against %s."),
+               unit_name_translation(actor_unit),
+               unit_name_translation(target_unit));
+    }
   } else {
     fc_assert_msg(target_unit != nullptr
                   || target_city != nullptr
@@ -3895,13 +3906,22 @@ void popup_sabotage_dialog(struct unit *actor, struct city *tcity,
   int diplomat_id = actor->id;
   int diplomat_target_id = tcity->id;
   pfcn_void func;
-  choice_dialog *cd = new choice_dialog(_("Sabotage"),
-                                        _("Select Improvement to Sabotage"),
-                                        gui()->game_tab_widget,
-                                        diplomat_queue_handle_secondary);
+  choice_dialog *cd;
   int nr = 0;
   struct astring stra = ASTRING_INIT;
   QList<QVariant> actor_and_target;
+
+  if (paction->result == ACTRES_STRIKE_BUILDING) {
+    cd = new choice_dialog(_("Strike"),
+                           _("Select Improvement to Strike"),
+                           gui()->game_tab_widget,
+                           diplomat_queue_handle_secondary);
+  } else {
+    cd = new choice_dialog(_("Sabotage"),
+                           _("Select Improvement to Sabotage"),
+                           gui()->game_tab_widget,
+                           diplomat_queue_handle_secondary);
+  }
 
   // Should be set before sending request to the server.
   fc_assert(is_more_user_input_needed);

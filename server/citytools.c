@@ -1132,6 +1132,12 @@ bool transfer_city(struct player *ptaker, struct city *pcity,
   /* Forget old rally point */
   city_rally_point_clear(pcity);
 
+  /* Clear pointer to old owner's access areas */
+  if (pcity->aarea != nullptr) {
+    city_list_remove(pcity->aarea->cities, pcity);
+    pcity->aarea = nullptr;
+  }
+
   /* Activate AI control of the new owner. */
   CALL_PLR_AI_FUNC(city_got, ptaker, ptaker, pcity);
 
@@ -1299,7 +1305,7 @@ bool transfer_city(struct player *ptaker, struct city *pcity,
 
     /* Set production to something valid for pplayer, if not.
      * (previously allowed building obsolete units.) */
-    if (!can_city_build_now(nmap, pcity, &pcity->production)) {
+    if (!can_city_build_now(nmap, pcity, &pcity->production, RPT_CERTAIN)) {
       advisor_choose_build(ptaker, pcity);
     }
 
@@ -2745,13 +2751,13 @@ void package_city(struct city *pcity, struct packet_city_info *packet,
     web_packet->granary_turns = city_turns_to_grow(pcity);
 
     improvement_iterate(pimprove) {
-      if (can_city_build_improvement_now(pcity, pimprove)) {
+      if (can_city_build_improvement_now(pcity, pimprove, RPT_CERTAIN)) {
         BV_SET(web_packet->can_build_improvement, improvement_index(pimprove));
       }
     } improvement_iterate_end;
 
     unit_type_iterate(punittype) {
-      if (can_city_build_unit_now(nmap, pcity, punittype)) {
+      if (can_city_build_unit_now(nmap, pcity, punittype, RPT_CERTAIN)) {
         BV_SET(web_packet->can_build_unit, utype_index(punittype));
       }
     } unit_type_iterate_end;

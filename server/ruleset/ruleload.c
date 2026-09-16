@@ -1321,14 +1321,14 @@ static bool load_game_names(struct section_file *file,
   const char *filename = secfile_name(file);
   bool ok = TRUE;
 
-  /* section: datafile */
+  /* Section: datafile */
   compat->version = rscompat_check_capabilities(file, filename, compat);
   if (compat->version <= 0) {
     return FALSE;
   }
 
-  (void) secfile_entry_by_path(file, "datafile.description");   /* unused */
-  (void) secfile_entry_by_path(file, "datafile.ruledit");       /* unused */
+  secfile_entry_ignore_by_path(file, "datafile.description");   /* Unused */
+  secfile_entry_ignore_by_path(file, "datafile.ruledit");       /* Unused */
 
   sec = secfile_sections_by_name_prefix(file, ACHIEVEMENT_SECTION_PREFIX);
   nval = (NULL != sec ? section_list_size(sec) : 0);
@@ -1453,8 +1453,8 @@ static bool load_action_names(struct section_file *file,
     return FALSE;
   }
 
-  (void) secfile_entry_by_path(file, "datafile.description");   /* Unused */
-  (void) secfile_entry_by_path(file, "datafile.ruledit");       /* Unused */
+  secfile_entry_ignore_by_path(file, "datafile.description");   /* Unused */
+  secfile_entry_ignore_by_path(file, "datafile.ruledit");       /* Unused */
 
   return ok;
 }
@@ -1478,8 +1478,8 @@ static bool load_tech_names(struct section_file *file,
     return FALSE;
   }
 
-  (void) secfile_entry_by_path(file, "datafile.description");   /* unused */
-  (void) secfile_entry_by_path(file, "datafile.ruledit");       /* unused */
+  secfile_entry_ignore_by_path(file, "datafile.description");   /* Unused */
+  secfile_entry_ignore_by_path(file, "datafile.ruledit");       /* Unused */
 
   /* User tech flag names */
   for (i = 0; (flag = secfile_lookup_str_default(file, NULL, "control.flags%d.name", i)) ;
@@ -1806,8 +1806,8 @@ static bool load_unit_names(struct section_file *file,
     return FALSE;
   }
 
-  (void) secfile_entry_by_path(file, "datafile.description");   /* unused */
-  (void) secfile_entry_by_path(file, "datafile.ruledit");       /* unused */
+  secfile_entry_ignore_by_path(file, "datafile.description");   /* Unused */
+  secfile_entry_ignore_by_path(file, "datafile.ruledit");       /* Unused */
 
   /* User unit flag names */
   for (i = 0; (flag = secfile_lookup_str_default(file, NULL, "control.flags%d.name", i)) ;
@@ -2568,8 +2568,8 @@ static bool load_building_names(struct section_file *file,
     return FALSE;
   }
 
-  (void) secfile_entry_by_path(file, "datafile.description");   /* unused */
-  (void) secfile_entry_by_path(file, "datafile.ruledit");       /* unused */
+  secfile_entry_ignore_by_path(file, "datafile.description");   /* Unused */
+  secfile_entry_ignore_by_path(file, "datafile.ruledit");       /* Unused */
 
   /* The names: */
   sec = secfile_sections_by_name_prefix(file, BUILDING_SECTION_PREFIX);
@@ -2774,8 +2774,8 @@ static bool load_terrain_names(struct section_file *file,
     return FALSE;
   }
 
-  (void) secfile_entry_by_path(file, "datafile.description");   /* unused */
-  (void) secfile_entry_by_path(file, "datafile.ruledit");       /* unused */
+  secfile_entry_ignore_by_path(file, "datafile.description");   /* Unused */
+  secfile_entry_ignore_by_path(file, "datafile.ruledit");       /* Unused */
 
   /* User terrain flag names */
   for (i = 0; (flag = secfile_lookup_str_default(file, NULL, "control.flags%d.name", i)) ;
@@ -3146,7 +3146,7 @@ static bool load_ruleset_terrain(struct section_file *file,
   int *res_freq;
   bool ok = TRUE;
 
-  /* parameters */
+  /* Parameters */
 
   terrain_control.ocean_reclaim_requirement_pct
     = secfile_lookup_int_default(file, 101,
@@ -4289,6 +4289,24 @@ static bool load_ruleset_terrain(struct section_file *file,
       const char *section = &tiledef_sections[tdidx * MAX_SECTION_LABEL];
       const char **slist;
       int ej;
+      const char *flag_name;
+
+      flag_name = secfile_lookup_str_default(file, nullptr,
+                                             "%s.terrain_flag", section);
+
+      if (flag_name == nullptr) {
+        td->terr_flag = terrain_flag_id_invalid();
+      } else {
+        td->terr_flag = terrain_flag_id_by_name(flag_name, fc_strcasecmp);
+
+        if (!terrain_flag_id_is_valid(td->terr_flag)) {
+          ruleset_error(nullptr, LOG_ERROR,
+                        "%s: Invalid terrain flag %s.",
+                        section, flag_name);
+          ok = FALSE;
+          break;
+        }
+      }
 
       slist = secfile_lookup_str_vec(file, &nval, "%s.extras", section);
       for (ej = 0; ej < nval; ej++) {
@@ -4348,8 +4366,8 @@ static bool load_government_names(struct section_file *file,
     return FALSE;
   }
 
-  (void) secfile_entry_by_path(file, "datafile.description");   /* unused */
-  (void) secfile_entry_by_path(file, "datafile.ruledit");       /* unused */
+  secfile_entry_ignore_by_path(file, "datafile.description");   /* Unused */
+  secfile_entry_ignore_by_path(file, "datafile.ruledit");       /* Unused */
 
   sec = secfile_sections_by_name_prefix(file, GOVERNMENT_SECTION_PREFIX);
   if (NULL == sec || 0 == (nval = section_list_size(sec))) {
@@ -4413,11 +4431,11 @@ static bool load_government_names(struct section_file *file,
   /* User government flag names */
   for (i = 0;
        (flag = secfile_lookup_str_default(file, nullptr,
-                                          "control.government_flags%d.name",
+                                          "control.flags%d.name",
                                           i));
        i++) {
     const char *helptxt = secfile_lookup_str_default(file, nullptr,
-        "control.government_flags%d.helptxt", i);
+        "control.flags%d.helptxt", i);
 
     if (gov_flag_id_by_name(flag, fc_strcasecmp)
         != gov_flag_id_invalid()) {
@@ -4736,8 +4754,8 @@ static bool load_nation_names(struct section_file *file,
     return FALSE;
   }
 
-  (void) secfile_entry_by_path(file, "datafile.description");   /* unused */
-  (void) secfile_entry_by_path(file, "datafile.ruledit");       /* unused */
+  secfile_entry_ignore_by_path(file, "datafile.description");   /* Unused */
+  secfile_entry_ignore_by_path(file, "datafile.ruledit");       /* Unused */
 
   sec = secfile_sections_by_name_prefix(file, NATION_SECTION_PREFIX);
   if (NULL == sec) {
@@ -5774,8 +5792,8 @@ static bool load_style_names(struct section_file *file,
     return FALSE;
   }
 
-  (void) secfile_entry_by_path(file, "datafile.description");   /* unused */
-  (void) secfile_entry_by_path(file, "datafile.ruledit");       /* unused */
+  secfile_entry_ignore_by_path(file, "datafile.description");   /* Unused */
+  secfile_entry_ignore_by_path(file, "datafile.ruledit");       /* Unused */
 
   sec = secfile_sections_by_name_prefix(file, STYLE_SECTION_PREFIX);
   if (NULL == sec) {
@@ -6059,8 +6077,8 @@ static bool load_ruleset_cities(struct section_file *file,
     return FALSE;
   }
 
-  (void) secfile_entry_by_path(file, "datafile.description");   /* unused */
-  (void) secfile_entry_by_path(file, "datafile.ruledit");       /* unused */
+  secfile_entry_ignore_by_path(file, "datafile.description");   /* Unused */
+  secfile_entry_ignore_by_path(file, "datafile.ruledit");       /* Unused */
 
   /* Specialist options */
   sec = secfile_sections_by_name_prefix(file, SPECIALIST_SECTION_PREFIX);
@@ -6275,8 +6293,8 @@ static bool load_ruleset_effects(struct section_file *file,
     return FALSE;
   }
 
-  (void) secfile_entry_by_path(file, "datafile.description");   /* unused */
-  (void) secfile_entry_by_path(file, "datafile.ruledit");       /* unused */
+  secfile_entry_ignore_by_path(file, "datafile.description");   /* Unused */
+  secfile_entry_ignore_by_path(file, "datafile.ruledit");       /* Unused */
 
   sec = secfile_sections_by_name_prefix(file, UEFF_SECTION_PREFIX);
 
@@ -7628,6 +7646,8 @@ static bool load_ruleset_game(struct section_file *file, bool act,
                                                    "aarea.access_unit");
     const struct unit_type *access_unit = nullptr;
 
+    terrain_control.access_unit = -1;
+
     if (uname != nullptr && uname[0] != '\0') {
       access_unit = unit_type_by_rule_name(uname);
 
@@ -7635,6 +7655,8 @@ static bool load_ruleset_game(struct section_file *file, bool act,
         ruleset_error(nullptr, LOG_ERROR, "%s: access unit %s unknown.",
                       filename, uname);
         ok = FALSE;
+      } else {
+        terrain_control.access_unit = utype_number(access_unit);
       }
     }
 

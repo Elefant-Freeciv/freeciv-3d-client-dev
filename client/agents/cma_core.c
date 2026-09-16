@@ -60,10 +60,10 @@
 
 /*
  * The CMA is an agent. The CMA will subscribe itself to all city
- * events. So if a city changes the callback function city_changed is
- * called. handle_city will be called from city_changed to update the
- * given city. handle_city will call cma_query_result and
- * apply_result_on_server to update the server city state.
+ * events. So if a city changes the callback function city_changed() is
+ * called. handle_city() will be called from city_changed() to update the
+ * given city. handle_city() will call cma_query_result() and
+ * apply_result_on_server() to update the server city state.
  */
 
 /****************************************************************************
@@ -163,8 +163,8 @@ static struct city *check_city(int city_id, struct cm_parameter *parameter)
 }
 
 /************************************************************************//**
- Change the actual city setting to the given result. Returns TRUE iff
- the actual data matches the calculated one.
+  Change the actual city setting to the given result. Returns TRUE iff
+  the actual data matches the calculated one.
 ****************************************************************************/
 static bool apply_result_on_server(struct city *pcity,
                                    const struct cm_result *result)
@@ -365,7 +365,7 @@ static void release_city(int city_id)
 ****************************************************************************/
 
 /************************************************************************//**
-  The given city has changed. handle_city ensures that either the city
+  The given city has changed. handle_city() ensures that either the city
   follows the set CMA goal or that the CMA detaches itself from the
   city.
 ****************************************************************************/
@@ -410,7 +410,7 @@ static void handle_city(struct city *pcity)
         if (pcity == check_city(city_id, NULL) && i == 0) {
           create_event(city_tile(pcity), E_CITY_CMA_RELEASE, ftc_client,
                        _("The citizen governor has gotten confused dealing "
-                         "with %s.  You may want to have a look."),
+                         "with %s. You may want to have a look."),
                        city_link(pcity));
         }
       } else {
@@ -430,7 +430,7 @@ static void handle_city(struct city *pcity)
 
     create_event(city_tile(pcity), E_CITY_CMA_RELEASE, ftc_client,
                  _("The citizen governor has gotten confused dealing "
-                   "with %s.  You may want to have a look."),
+                   "with %s. You may want to have a look."),
                  city_link(pcity));
 
     cma_release_city(pcity);
@@ -625,26 +625,26 @@ void cma_set_parameter(enum attr_city attr, int city_id,
                        const struct cm_parameter *parameter)
 {
   char buffer[SAVED_PARAMETER_SIZE];
-  struct raw_data_out dout;
+  struct raw_data_out d_out;
 
   /* Changing this function is likely to break compatibility with old
    * savegames that store these values. */
 
-  dio_output_init(&dout, buffer, sizeof(buffer));
+  dio_output_init(&d_out, buffer, sizeof(buffer));
 
-  dio_put_uint8_raw(&dout, CMA_ATTR_VERSION);
+  dio_put_uint8_raw(&d_out, CMA_ATTR_VERSION);
 
   output_type_iterate(i) {
-    dio_put_sint16_raw(&dout, parameter->minimal_surplus[i]);
-    dio_put_sint16_raw(&dout, parameter->factor[i]);
+    dio_put_sint16_raw(&d_out, parameter->minimal_surplus[i]);
+    dio_put_sint16_raw(&d_out, parameter->factor[i]);
   } output_type_iterate_end;
 
-  dio_put_sint16_raw(&dout, parameter->happy_factor);
-  dio_put_uint8_raw(&dout, 0); /* Dummy value; used to be factor_target. */
-  dio_put_bool8_raw(&dout, parameter->require_happy);
-  dio_put_bool8_raw(&dout, parameter->max_growth);
+  dio_put_sint16_raw(&d_out, parameter->happy_factor);
+  dio_put_uint8_raw(&d_out, 0); /* Dummy value; used to be factor_target. */
+  dio_put_bool8_raw(&d_out, parameter->require_happy);
+  dio_put_bool8_raw(&d_out, parameter->max_growth);
 
-  fc_assert(dio_output_used(&dout) == SAVED_PARAMETER_SIZE);
+  fc_assert(dio_output_used(&d_out) == SAVED_PARAMETER_SIZE);
 
   attr_city_set(attr, city_id, SAVED_PARAMETER_SIZE, buffer);
 }

@@ -45,6 +45,23 @@
 
 #include "requirements.h"
 
+struct thr_req_data
+{
+  fc_thread_id thr_id;
+};
+
+/* get 'struct thr_req_data_list' and related functions: */
+#define SPECLIST_TAG thr_req_data
+#define SPECLIST_TYPE struct thr_req_data
+#include "speclist.h"
+
+#define thr_req_data_list_iterate(trlist, ptrdata) \
+    TYPED_LIST_ITERATE(struct thr_req_data, trlist, ptrdata)
+#define thr_req_data_list_iterate_end  LIST_ITERATE_END
+
+static struct thr_req_data_list *trdatas;
+static fc_mutex trmutex;
+
 /************************************************************************
   Container for req_item_found functions
 ************************************************************************/
@@ -230,6 +247,43 @@ struct req_def {
 };
 
 /**********************************************************************//**
+  Thread exit callback
+**************************************************************************/
+static void thr_exit_cb(void)
+{
+  fc_thread_id self = fc_thread_self();
+
+  fc_mutex_allocate(&trmutex);
+  thr_req_data_list_iterate(trdatas, data) {
+    if (fc_threads_equal(self, data->thr_id)) {
+      thr_req_data_list_remove(trdatas, data);
+      free(data);
+      break;
+    }
+  } thr_req_data_list_iterate_end;
+  fc_mutex_release(&trmutex);
+}
+
+/**********************************************************************//**
+  Initialize requirements module
+**************************************************************************/
+void requirements_init(void)
+{
+  trdatas = thr_req_data_list_new();
+  fc_mutex_init(&trmutex);
+  register_at_thread_exit_callback(thr_exit_cb);
+}
+
+/**********************************************************************//**
+  Deinitialize requirements module
+**************************************************************************/
+void requirements_free(void)
+{
+  fc_mutex_destroy(&trmutex);
+  thr_req_data_list_destroy(trdatas);
+}
+
+/**********************************************************************//**
   Parse requirement type (kind) and value strings into a universal
   structure. Passing in a nullptr type is considered VUT_NONE (not an error).
 
@@ -355,6 +409,7 @@ void universal_value_from_str(struct universal *source, const char *value)
     }
     break;
   case VUT_TILEDEF:
+  case VUT_TILEDEF_CONNECTED:
     source->value.tiledef = tiledef_by_rule_name(value);
     if (source->value.tiledef != nullptr) {
       return;
@@ -733,6 +788,7 @@ struct universal universal_by_number(const enum universals_n kind,
     source.value.extra = extra_by_number(value);
     return source;
   case VUT_TILEDEF:
+  case VUT_TILEDEF_CONNECTED:
     source.value.tiledef = tiledef_by_number(value);
     return source;
   case VUT_GOOD:
@@ -975,6 +1031,7 @@ int universal_number(const struct universal *source)
   case VUT_EXTRA:
     return extra_number(source->value.extra);
   case VUT_TILEDEF:
+  case VUT_TILEDEF_CONNECTED:
     return tiledef_number(source->value.tiledef);
   case VUT_GOOD:
     return goods_number(source->value.good);
@@ -1203,6 +1260,7 @@ struct requirement req_from_str(const char *type, const char *range,
       case VUT_ORIGINAL_OWNER:
       case VUT_CITYSTATUS:
       case VUT_GOOD:
+      case VUT_TILEDEF_CONNECTED:
         req.range = REQ_RANGE_CITY;
         break;
       case VUT_GOVERNMENT:
@@ -1297,6 +1355,7 @@ struct requirement req_from_str(const char *type, const char *range,
       break;
     case VUT_GOOD:
     case VUT_ORIGINAL_OWNER:
+    case VUT_TILEDEF_CONNECTED:
       invalid = (req.range != REQ_RANGE_CITY);
       break;
     case VUT_MINCULTURE:
@@ -1505,6 +1564,7 @@ struct requirement req_from_str(const char *type, const char *range,
     case VUT_EXTRAFLAG:
     case VUT_EXTRA:
     case VUT_TILEDEF:
+    case VUT_TILEDEF_CONNECTED:
     case VUT_GOOD:
     case VUT_TECHFLAG:
     case VUT_ACHIEVEMENT:
@@ -2104,7 +2164,7 @@ bool are_requirements_contradictions(const struct requirement *req1,
 
 /**********************************************************************//**
   Returns the first requirement in the specified requirement vector that
-  contradicts the specified requirement or NULL if no contradiction was
+  contradicts the specified requirement or nullptr if no contradiction was
   detected.
   @param req the requirement that may contradict the vector
   @param vec the requirement vector to look in
@@ -3301,6 +3361,41 @@ is_tiledef_req_active(const struct civ_map *nmap,
   case REQ_RANGE_WORLD:
   case REQ_RANGE_COUNT:
     break;
+  }
+
+  fc_assert_msg(FALSE, "Invalid range %d.", req->range);
+
+  return TRI_MAYBE;
+}
+
+/**********************************************************************//**
+  Determine whether a tiledef connected requirement is satisfied in
+  a given context, ignoring parts of the requirement that can be handled
+  uniformly for all requirement types.
+
+  context, other_context and req must not be null,
+  and req must be a tiledef requirement
+**************************************************************************/
+static enum fc_tristate
+is_tiledef_conn_req_active(const struct civ_map *nmap,
+                           const struct req_context *context,
+                           const struct req_context *other_context,
+                           const struct requirement *req)
+{
+  IS_REQ_ACTIVE_VARIANT_ASSERT(VUT_TILEDEF_CONNECTED);
+
+  if (req->range == REQ_RANGE_CITY) {
+    if (context->city == nullptr
+        || context->city->aarea == nullptr) {
+      return TRI_MAYBE;
+    }
+
+    if (BV_ISSET(context->city->aarea->tiledefs,
+                 tiledef_index(req->source.value.tiledef))) {
+      return TRI_YES;
+    }
+
+    return TRI_NO;
   }
 
   fc_assert_msg(FALSE, "Invalid range %d.", req->range);
@@ -6068,30 +6163,31 @@ is_citystatus_req_active(const struct civ_map *nmap,
     return TRI_MAYBE;
 
   case CITYS_CAPITALCONNECTED:
-    if (!is_server()) {
-      /* Client has no idea. */
-      return TRI_MAYBE;
-    }
-
     switch (req->range) {
     case REQ_RANGE_CITY:
-      return BOOL_TO_TRISTATE(context->city->server.aarea != nullptr
-                              && context->city->server.aarea->capital);
+      if (context->city->aarea == nullptr) {
+        return TRI_MAYBE;
+      }
+      return BOOL_TO_TRISTATE(context->city->aarea->capital);
     case REQ_RANGE_TRADE_ROUTE:
       {
         enum fc_tristate ret;
 
-        if (context->city->server.aarea != nullptr
-            && context->city->server.aarea->capital) {
+        if (context->city->aarea != nullptr
+            && context->city->aarea->capital) {
           return TRI_YES;
         }
 
-        ret = TRI_NO;
+        if (context->city->aarea == nullptr) {
+          ret = TRI_MAYBE;
+        } else {
+          ret = TRI_NO;
+        }
         trade_partners_iterate(context->city, trade_partner) {
-          if (trade_partner == nullptr) {
+          if (trade_partner == nullptr
+              || trade_partner->aarea == nullptr) {
             ret = TRI_MAYBE;
-          } else if (trade_partner->server.aarea != nullptr
-                     && trade_partner->server.aarea->capital) {
+          } else if (trade_partner->aarea->capital) {
             return TRI_YES;
           }
         } trade_partners_iterate_end;
@@ -6581,6 +6677,7 @@ static struct req_def req_definitions[VUT_COUNT] = {
   [VUT_DIPLREL_UNITANY_O] = {is_diplrel_unitany_o_req_active, REQUCH_NO},
   [VUT_EXTRA] = {is_extra_req_active, REQUCH_NO, REQUC_LOCAL},
   [VUT_TILEDEF] = {is_tiledef_req_active, REQUCH_NO, REQUC_LOCAL},
+  [VUT_TILEDEF_CONNECTED] = {is_tiledef_conn_req_active, REQUCH_NO, REQUC_LOCAL},
   [VUT_EXTRAFLAG] = {is_extraflag_req_active, REQUCH_NO, REQUC_LOCAL},
   [VUT_FUTURETECHS] = {is_futuretechs_req_active, REQUCH_ACT, REQUC_WORLD},
   [VUT_GOOD] = {is_good_req_active, REQUCH_NO},
@@ -6651,8 +6748,25 @@ bool is_req_active(const struct req_context *context,
                    const enum   req_problem_type prob_type)
 {
   const struct civ_map *nmap = &(wld.map);
-  enum fc_tristate eval = tri_req_present(nmap, context, other_context,
-                                          req);
+  enum fc_tristate eval;
+  fc_thread_id self = fc_thread_self();
+  struct thr_req_data *trdata = nullptr;
+
+  fc_mutex_allocate(&trmutex);
+  thr_req_data_list_iterate(trdatas, data) {
+    if (fc_threads_equal(self, data->thr_id)) {
+      trdata = data;
+    }
+  } thr_req_data_list_iterate_end;
+
+  if (trdata == nullptr) {
+    trdata = fc_malloc(sizeof(struct thr_req_data));
+    trdata->thr_id = self;
+    thr_req_data_list_append(trdatas, trdata);
+  }
+  fc_mutex_release(&trmutex);
+
+  eval = tri_req_present(nmap, context, other_context, req);
 
   if (eval == TRI_MAYBE) {
     if (prob_type == RPT_POSSIBLE) {
@@ -6661,6 +6775,7 @@ bool is_req_active(const struct req_context *context,
       return FALSE;
     }
   }
+
   return req->present ? (eval != TRI_NO) : (eval != TRI_YES);
 }
 
@@ -7167,6 +7282,7 @@ bool universal_never_there(const struct universal *source)
   case VUT_TERRAIN:
   case VUT_EXTRA:
   case VUT_TILEDEF:
+  case VUT_TILEDEF_CONNECTED:
   case VUT_GOOD:
   case VUT_TERRAINCLASS:
   case VUT_TERRFLAG:
@@ -7765,6 +7881,7 @@ bool are_universals_equal(const struct universal *psource1,
   case VUT_EXTRA:
     return psource1->value.extra == psource2->value.extra;
   case VUT_TILEDEF:
+  case VUT_TILEDEF_CONNECTED:
     return psource1->value.tiledef == psource2->value.tiledef;
   case VUT_GOOD:
     return psource1->value.good == psource2->value.good;
@@ -7932,6 +8049,7 @@ const char *universal_rule_name(const struct universal *psource)
   case VUT_EXTRA:
     return extra_rule_name(psource->value.extra);
   case VUT_TILEDEF:
+  case VUT_TILEDEF_CONNECTED:
     return tiledef_rule_name(psource->value.tiledef);
   case VUT_GOOD:
     return goods_rule_name(psource->value.good);
@@ -8134,6 +8252,7 @@ const char *universal_name_translation(const struct universal *psource,
     fc_strlcat(buf, extra_name_translation(psource->value.extra), bufsz);
     return buf;
   case VUT_TILEDEF:
+  case VUT_TILEDEF_CONNECTED:
     fc_strlcat(buf, tiledef_name_translation(psource->value.tiledef), bufsz);
     return buf;
   case VUT_GOOD:

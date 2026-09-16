@@ -824,7 +824,7 @@ static void spy_improvements_callback(GtkTreeSelection *select, gpointer data)
 }
 
 /**********************************************************************//**
-  Creates spy's building sabotaging dialog
+  Creates building destruction dialog
 **************************************************************************/
 static void create_improvements_list(struct player *pplayer,
 				     struct city *pcity,
@@ -835,22 +835,35 @@ static void create_improvements_list(struct player *pplayer,
   GtkCellRenderer *rend;
   GtkTreeViewColumn *col;
   GtkTreeIter it;
-
+  struct action *paction = action_by_number(args->act_id);
   struct unit *actor_unit = game_unit_by_number(args->actor_unit_id);
 
-  spy_sabotage_shell = gtk_dialog_new_with_buttons(_("Sabotage Improvements"),
-                                                   NULL, 0,
-                                                   _("_Cancel"), GTK_RESPONSE_CANCEL,
-                                                   _("_Sabotage"), GTK_RESPONSE_ACCEPT,
-                                                   NULL);
+  if (paction->result == ACTRES_STRIKE_BUILDING) {
+    spy_sabotage_shell = gtk_dialog_new_with_buttons(_("Strike Improvements"),
+                                                     NULL, 0,
+                                                     _("_Cancel"), GTK_RESPONSE_CANCEL,
+                                                     _("_Strike"), GTK_RESPONSE_ACCEPT,
+                                                     NULL);
+  } else {
+    spy_sabotage_shell = gtk_dialog_new_with_buttons(_("Sabotage Improvements"),
+                                                     NULL, 0,
+                                                     _("_Cancel"), GTK_RESPONSE_CANCEL,
+                                                     _("_Sabotage"), GTK_RESPONSE_ACCEPT,
+                                                     NULL);
+  }
   setup_dialog(spy_sabotage_shell, toplevel);
   gtk_window_set_position(GTK_WINDOW(spy_sabotage_shell), GTK_WIN_POS_MOUSE);
 
   gtk_dialog_set_default_response(GTK_DIALOG(spy_sabotage_shell),
 				  GTK_RESPONSE_ACCEPT);
 
-  label = gtk_frame_new(_("Select Improvement to Sabotage"));
-  gtk_container_add(GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(spy_sabotage_shell))), label);
+  if (paction->result == ACTRES_STRIKE_BUILDING) {
+    label = gtk_frame_new(_("Select Improvement to Strike"));
+  } else {
+    label = gtk_frame_new(_("Select Improvement to Sabotage"));
+  }
+  gtk_container_add(GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(spy_sabotage_shell))),
+                    label);
 
   vbox = gtk_grid_new();
   gtk_orientable_set_orientation(GTK_ORIENTABLE(vbox),
@@ -944,8 +957,6 @@ static void create_improvements_list(struct player *pplayer,
 static void spy_steal_popup_shared(GtkWidget *w, gpointer data)
 {
   struct action_data *args = (struct action_data *)data;
-
-  args->act_id = args->act_id;
 
   struct city *pvcity = game_city_by_number(args->target_city_id);
   struct player *pvictim = NULL;
@@ -1481,13 +1492,24 @@ void popup_action_selection(struct unit *actor_unit,
              _("Your %s has arrived at %s.\nWhat is your command?"),
              unit_name_translation(actor_unit),
              city_name_get(target_city));
-  } else if (target_unit) {
-    astr_set(&text,
-             /* TRANS: Your Spy is ready to act against Roman Freight. */
-             _("Your %s is ready to act against %s %s."),
-             unit_name_translation(actor_unit),
-             nation_adjective_for_player(unit_owner(target_unit)),
-             unit_name_translation(target_unit));
+  } else if (target_unit != nullptr) {
+    struct player *owner = unit_owner(target_unit);
+
+    if (owner != nullptr) {
+      astr_set(&text,
+               /* TRANS: Your Spy is ready to act against Roman Freight. */
+               _("Your %s is ready to act against %s %s."),
+               unit_name_translation(actor_unit),
+               nation_adjective_for_player(unit_owner(target_unit)),
+               unit_name_translation(target_unit));
+    } else {
+      /* Flagless unit */
+      astr_set(&text,
+               /* TRANS: Your Spy is ready to act against Freight. */
+               _("Your %s is ready to act against %s."),
+               unit_name_translation(actor_unit),
+               unit_name_translation(target_unit));
+    }
   } else {
     fc_assert_msg(target_unit || target_city || target_tile,
                   "No target specified.");

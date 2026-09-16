@@ -45,6 +45,7 @@ enum effect_type req_base_effects[] =
     EFT_CITY_VISION_RADIUS_SQ,
     EFT_MAX_RATES,
     EFT_UPKEEP_PCT,
+    EFT_TECH_COST_PCT,
     EFT_COUNT
   };
 
@@ -60,7 +61,7 @@ enum effect_type req_base_effects_3_4[] =
 **************************************************************************/
 static bool sanity_check_metadata(rs_conversion_logger logger)
 {
-  if (game.ruleset_summary != NULL
+  if (game.ruleset_summary != nullptr
       && strlen(game.ruleset_summary) > MAX_LEN_CONTENT) {
     ruleset_error(logger,
                   LOG_ERROR,
@@ -423,6 +424,7 @@ static bool sanity_check_req_set(rs_conversion_logger logger,
       /* Can have multiple, since it's flag based (wrapx & wrapy) */
     case VUT_EXTRA:
     case VUT_TILEDEF:
+    case VUT_TILEDEF_CONNECTED:
       /* Note that there can be more than 1 extra / tile. */
     case VUT_MAXTILETOTALUNITS:
     case VUT_MAXTILETOPUNITS:
@@ -523,7 +525,7 @@ static bool sanity_check_req_vec(rs_conversion_logger logger,
   } requirement_vector_iterate_end;
 
   problem = req_vec_suggest_repair(preqs, req_vec_vector_number, preqs);
-  if (problem != NULL) {
+  if (problem != nullptr) {
     ruleset_error(logger, LOG_ERROR, "%s: %s.", list_for, problem->description);
     req_vec_problem_free(problem);
     return FALSE;
@@ -748,7 +750,7 @@ static bool rs_common_units(rs_conversion_logger logger)
   }
 
   if (num_role_units(L_PARTISAN) == 0
-      && effect_cumulative_max(EFT_INSPIRE_PARTISANS, NULL, 0) > 0) {
+      && effect_cumulative_max(EFT_INSPIRE_PARTISANS, nullptr, 0) > 0) {
     ruleset_error(logger, LOG_ERROR,
                   _("Inspire_Partisans effect present, "
                     "but no units with partisan role."));
@@ -827,11 +829,11 @@ static bool rs_buildings(rs_conversion_logger logger)
       return FALSE;
     }
     if (pimprove->genus != IG_SPECIAL
-        && (get_potential_improvement_bonus(pimprove, NULL, EFT_SS_STRUCTURAL,
+        && (get_potential_improvement_bonus(pimprove, nullptr, EFT_SS_STRUCTURAL,
                                             RPT_POSSIBLE, FALSE)
-            || get_potential_improvement_bonus(pimprove, NULL, EFT_SS_COMPONENT,
+            || get_potential_improvement_bonus(pimprove, nullptr, EFT_SS_COMPONENT,
                                                RPT_POSSIBLE, FALSE)
-            || get_potential_improvement_bonus(pimprove, NULL, EFT_SS_MODULE,
+            || get_potential_improvement_bonus(pimprove, nullptr, EFT_SS_MODULE,
                                                RPT_POSSIBLE, FALSE))) {
       ruleset_error(logger, LOG_ERROR,
                     _("Space part %s with genus other than \"Special\""),
@@ -885,8 +887,8 @@ static bool sanity_check_boolean_effects(rs_conversion_logger logger)
   bool ret = TRUE;
 
   for (i = 0; boolean_effects[i] != EFT_COUNT; i++) {
-    if (effect_cumulative_min(boolean_effects[i], NULL) < 0
-        && effect_cumulative_max(boolean_effects[i], NULL, 0) == 0) {
+    if (effect_cumulative_min(boolean_effects[i], nullptr) < 0
+        && effect_cumulative_max(boolean_effects[i], nullptr, 0) == 0) {
       ruleset_error(logger, LOG_ERROR,
                     _("Boolean effect %s can get disabled, but it can't get "
                       "enabled before that."),
@@ -915,7 +917,8 @@ bool sanity_check_ruleset_data(struct rscompat_info *compat)
   bool default_gov_failed = FALSE;
   bool obsoleted_by_loop = FALSE;
   els_data els;
-  rs_conversion_logger logger = ((compat != NULL) ? compat->log_cb : NULL);
+  rs_conversion_logger logger
+    = ((compat != nullptr) ? compat->log_cb : nullptr);
 
   if (!sanity_check_metadata(logger)) {
     ok = FALSE;
@@ -972,7 +975,7 @@ bool sanity_check_ruleset_data(struct rscompat_info *compat)
                         " and req2 like before."),
                       advance_rule_name(padvance));
         ok = FALSE;
-      } else if (is_req_unchanging(NULL, preq) < REQUCH_HACK
+      } else if (is_req_unchanging(nullptr, preq) < REQUCH_HACK
                  /* If we get an obsolete improvement before the game,
                   * almost surely it is going to become not obsolete later.
                   * This check must catch it. */) {
@@ -993,7 +996,7 @@ bool sanity_check_ruleset_data(struct rscompat_info *compat)
       }
     } requirement_vector_iterate_end;
 
-    if (padvance->bonus_message != NULL) {
+    if (padvance->bonus_message != nullptr) {
       if (!formats_match(padvance->bonus_message, "%s")) {
         ruleset_error(logger, LOG_ERROR,
                       _("Tech \"%s\" bonus message is not format with %%s "
@@ -1023,7 +1026,7 @@ bool sanity_check_ruleset_data(struct rscompat_info *compat)
       Tech_type_id tech = game.rgame.global_init_techs[techi];
       struct advance *a = valid_advance_by_number(tech);
 
-      if (a == NULL) {
+      if (a == nullptr) {
         ruleset_error(logger, LOG_ERROR,
                       _("Tech %s does not exist, but is initial "
                         "tech for everyone."),
@@ -1048,7 +1051,7 @@ bool sanity_check_ruleset_data(struct rscompat_info *compat)
       Tech_type_id tech = pnation->init_techs[techi];
       struct advance *a = valid_advance_by_number(tech);
 
-      if (a == NULL) {
+      if (a == nullptr) {
         ruleset_error(logger, LOG_ERROR,
                       _("Tech %s does not exist, but is initial tech for %s."),
                       advance_rule_name(advance_by_number(tech)),
@@ -1090,7 +1093,7 @@ bool sanity_check_ruleset_data(struct rscompat_info *compat)
     int chain_length = 0;
     const struct unit_type *upgraded = putype;
 
-    while (upgraded != NULL && !obsoleted_by_loop) {
+    while (upgraded != nullptr && !obsoleted_by_loop) {
       upgraded = upgraded->obsoleted_by;
       chain_length++;
       if (chain_length > num_utypes) {
@@ -1575,7 +1578,7 @@ bool sanity_check_ruleset_data(struct rscompat_info *compat)
   } unit_class_re_active_iterate_end;
 
   achievements_re_active_iterate(pach) {
-    if (!pach->unique && pach->cons_msg == NULL) {
+    if (!pach->unique && pach->cons_msg == nullptr) {
       ruleset_error(logger, LOG_ERROR,
                     _("Achievement %s has no message for consecutive gainers though "
                       "it's possible to be gained by multiple players"),
@@ -1584,14 +1587,14 @@ bool sanity_check_ruleset_data(struct rscompat_info *compat)
     }
   } achievements_re_active_iterate_end;
 
-  if (game.server.ruledit.embedded_nations != NULL) {
+  if (game.server.ruledit.embedded_nations != nullptr) {
     int nati;
 
     for (nati = 0; nati < game.server.ruledit.embedded_nations_count; nati++) {
       struct nation_type *pnat
         = nation_by_rule_name(game.server.ruledit.embedded_nations[nati]);
 
-      if (pnat == NULL) {
+      if (pnat == nullptr) {
         ruleset_error(logger, LOG_ERROR,
                       _("There's nation %s listed in embedded nations, but there's "
                         "no such nation."),
@@ -1726,7 +1729,7 @@ bool autolock_settings(void)
     log_normal(_("Disabling 'barbarians' setting for lack of suitable "
                  "unit types."));
     setting_ruleset_lock_clear(pset);
-    if (!setting_enum_set(pset, "DISABLED", NULL, NULL, 0)) {
+    if (!setting_enum_set(pset, "DISABLED", nullptr, nullptr, 0)) {
       ok = FALSE;
     }
     setting_ruleset_lock_set(pset);

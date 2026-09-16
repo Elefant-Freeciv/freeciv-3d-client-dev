@@ -223,9 +223,16 @@ static void count_my_units(struct player *pplayer)
         || unit_can_do_action(punit, ACTION_PARADROP_FRIGHTEN)
         || unit_can_do_action(punit, ACTION_PARADROP_FRIGHTEN_CONQUER)
         || unit_can_do_action(punit, ACTION_PARADROP_ENTER)
-        || unit_can_do_action(punit, ACTION_PARADROP_ENTER_CONQUER)) {
-      /* TODO: Cover also teleporting */
-      adv->stats.units.paratroopers++;
+        || unit_can_do_action(punit, ACTION_PARADROP_ENTER_CONQUER)
+        || unit_can_do_action(punit, ACTION_TELEPORT)
+        || unit_can_do_action(punit, ACTION_TELEPORT2)
+        || unit_can_do_action(punit, ACTION_TELEPORT3)
+        || unit_can_do_action(punit, ACTION_TELEPORT_CONQUER)
+        || unit_can_do_action(punit, ACTION_TELEPORT_FRIGHTEN)
+        || unit_can_do_action(punit, ACTION_TELEPORT_FRIGHTEN_CONQUER)
+        || unit_can_do_action(punit, ACTION_TELEPORT_ENTER)
+        || unit_can_do_action(punit, ACTION_TELEPORT_ENTER_CONQUER)) {
+      adv->stats.units.teleporters++;
     }
     if (utype_can_do_action(punit->utype, ACTION_AIRLIFT)) {
       adv->stats.units.airliftable++;
@@ -392,7 +399,8 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
         struct unit_type *nuke
           = get_role_unit(action_id_get_role(act_id), i);
 
-        if (can_player_build_unit_direct(aplayer, nuke, FALSE)) {
+        if (can_player_build_unit_direct(aplayer, nuke,
+                                         RPT_CERTAIN, FALSE)) {
           adv->threats.nuclear = 1;
         }
       }

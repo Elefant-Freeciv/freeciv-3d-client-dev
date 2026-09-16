@@ -496,7 +496,8 @@ static void city_global_turn_notify(struct conn_list *dest)
     if (VUT_IMPROVEMENT == pcity->production.kind
         && is_great_wonder(pimprove)
         && (1 >= city_production_turns_to_build(pcity, TRUE)
-        && can_city_build_improvement_now(pcity, pimprove))) {
+            && can_city_build_improvement_now(pcity, pimprove,
+                                              RPT_CERTAIN))) {
       notify_conn(dest, city_tile(pcity),
                   E_WONDER_WILL_BE_BUILT, ftc_server,
                   _("Notice: Wonder %s in %s will be finished next turn."),
@@ -1526,6 +1527,29 @@ static bool worklist_item_postpone_req_vec(struct universal *target,
                                     pcity, "have_tiledef");
         }
         break;
+      case VUT_TILEDEF_CONNECTED:
+        if (preq->present) {
+          notify_player(pplayer, city_tile(pcity),
+                        E_CITY_CANTBUILD, ftc_server,
+                        Q_("?tdconn:%s can't build %s from the worklist; "
+                           "access to %s is required. Postponing..."),
+                        city_link(pcity),
+                        tgt_name,
+                        tiledef_name_translation(preq->source.value.tiledef));
+          script_server_signal_emit(signal_name, ptarget,
+                                    pcity, "need_tiledef_conn");
+        } else {
+          notify_player(pplayer, city_tile(pcity),
+                        E_CITY_CANTBUILD, ftc_server,
+                        Q_("?tdconn:%s can't build %s from the worklist; "
+                           "access to %s is prohibited. Postponing..."),
+                        city_link(pcity),
+                        tgt_name,
+                        tiledef_name_translation(preq->source.value.tiledef));
+          script_server_signal_emit(signal_name, ptarget,
+                                    pcity, "have_tiledef_conn");
+        }
+        break;
       case VUT_GOOD:
         if (preq->present) {
           notify_player(pplayer, city_tile(pcity),
@@ -2351,7 +2375,7 @@ static bool worklist_change_build_target(struct player *pplayer,
     }
 
     if (worklist_peek_ith(pwl, &target, i)) {
-      success = can_city_build_now(nmap, pcity, &target);
+      success = can_city_build_now(nmap, pcity, &target, RPT_CERTAIN);
     } else {
       success = FALSE;
     }
@@ -2555,14 +2579,16 @@ void choose_build_target(struct player *pplayer, struct city *pcity)
   case VUT_UTYPE:
     /* We can build a unit again unless it's unique or we have lost the tech. */
     if (!utype_has_flag(pcity->production.value.utype, UTYF_UNIQUE)
-        && can_city_build_unit_now(nmap, pcity, pcity->production.value.utype)) {
+        && can_city_build_unit_now(nmap, pcity, pcity->production.value.utype,
+                                   RPT_CERTAIN)) {
       log_base(LOG_BUILD_TARGET, "%s repeats building %s", city_name_get(pcity),
                utype_rule_name(pcity->production.value.utype));
       return;
     }
     break;
   case VUT_IMPROVEMENT:
-    if (can_city_build_improvement_now(pcity, pcity->production.value.building)) {
+    if (can_city_build_improvement_now(pcity, pcity->production.value.building,
+                                       RPT_CERTAIN)) {
       /* We can build space and coinage again, and possibly others. */
       log_base(LOG_BUILD_TARGET, "%s repeats building %s", city_name_get(pcity),
                improvement_rule_name(pcity->production.value.building));
@@ -2591,11 +2617,11 @@ static const struct impr_type *building_upgrades_to(struct city *pcity,
   const struct impr_type *check = pimprove;
   const struct impr_type *best_upgrade = nullptr;
 
-  if (!can_city_build_improvement_direct(pcity, check)) {
+  if (!can_city_build_improvement_direct(pcity, check, RPT_CERTAIN)) {
     return nullptr;
   }
   while (valid_improvement(check = improvement_replacement(check))) {
-    if (can_city_build_improvement_direct(pcity, check)) {
+    if (can_city_build_improvement_direct(pcity, check, RPT_CERTAIN)) {
       best_upgrade = check;
     }
   }
@@ -2611,7 +2637,8 @@ static void upgrade_building_prod(struct city *pcity)
   const struct impr_type *producing = pcity->production.value.building;
   const struct impr_type *upgrading = building_upgrades_to(pcity, producing);
 
-  if (upgrading && can_city_build_improvement_now(pcity, upgrading)) {
+  if (upgrading
+      && can_city_build_improvement_now(pcity, upgrading, RPT_CERTAIN)) {
     notify_player(city_owner(pcity), city_tile(pcity),
                   E_UNIT_UPGRADED, ftc_server,
                   _("Production of %s is upgraded to %s in %s."),
@@ -2638,11 +2665,11 @@ static const struct unit_type *unit_upgrades_to(struct city *pcity,
   const struct unit_type *best_upgrade = U_NOT_OBSOLETED;
   const struct civ_map *nmap = &(wld.map);
 
-  if (!can_city_build_unit_direct(nmap, pcity, punittype)) {
+  if (!can_city_build_unit_direct(nmap, pcity, punittype, RPT_CERTAIN)) {
     return U_NOT_OBSOLETED;
   }
   while ((check = check->obsoleted_by) != U_NOT_OBSOLETED) {
-    if (can_city_build_unit_direct(nmap, pcity, check)) {
+    if (can_city_build_unit_direct(nmap, pcity, check, RPT_CERTAIN)) {
       best_upgrade = check;
     }
   }
@@ -2659,7 +2686,8 @@ static void upgrade_unit_prod(struct city *pcity)
   const struct unit_type *upgrading = unit_upgrades_to(pcity, producing);
   const struct civ_map *nmap = &(wld.map);
 
-  if (upgrading && can_city_build_unit_direct(nmap, pcity, upgrading)) {
+  if (upgrading && can_city_build_unit_direct(nmap, pcity, upgrading,
+                                              RPT_CERTAIN)) {
     notify_player(city_owner(pcity), city_tile(pcity),
                   E_UNIT_UPGRADED, ftc_server,
                   _("Production of %s is upgraded to %s in %s."),
@@ -2790,7 +2818,7 @@ static bool city_build_building(struct player *pplayer, struct city *pcity)
   /* The final (after upgrade) build target */
   pimprove = pcity->production.value.building;
 
-  if (!can_city_build_improvement_now(pcity, pimprove)) {
+  if (!can_city_build_improvement_now(pcity, pimprove, RPT_CERTAIN)) {
     notify_player(pplayer, city_tile(pcity), E_CITY_CANTBUILD, ftc_server,
                   _("%s is building %s, which is no longer available."),
                   city_link(pcity),
@@ -3005,7 +3033,7 @@ static bool city_build_unit(struct player *pplayer, struct city *pcity)
   /* We must make a special case for barbarians here, because they are
      so dumb. Really. They don't know the prerequisite techs for units
      they build!! - Per */
-  if (!can_city_build_unit_direct(nmap, pcity, utype)
+  if (!can_city_build_unit_direct(nmap, pcity, utype, RPT_CERTAIN)
       && !is_barbarian(pplayer)) {
     notify_player(pplayer, city_tile(pcity), E_CITY_CANTBUILD, ftc_server,
                   _("%s is building %s, which is no longer available."),

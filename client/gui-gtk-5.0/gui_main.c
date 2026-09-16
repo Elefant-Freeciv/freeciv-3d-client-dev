@@ -15,7 +15,7 @@
 #include <fc_config.h>
 #endif
 
-#ifdef AUDIO_SDL
+#ifdef AUDIO_SDL2
 /* Though it would happily compile without this include,
  * it is needed for sound to work.
  * It defines "main" macro to rename our main() so that
@@ -25,7 +25,7 @@
 #else  /* PLAIN_INCLUDE */
 #include <SDL2/SDL.h>
 #endif /* PLAIN_INCLUDE */
-#endif /* AUDIO_SDL */
+#endif /* AUDIO_SDL2 */
 
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
@@ -41,7 +41,7 @@
 #endif
 
 #include <gtk/gtk.h>
-#include <gdk/gdkkeysyms.h>
+#include <gdk/gdk.h>
 
 /* utility */
 #include "fc_cmdline.h"
@@ -128,7 +128,6 @@ GtkWidget *toplevel_tabs;
 GtkWidget *top_vbox;
 GtkWidget *top_notebook, *bottom_notebook, *right_notebook;
 GtkWidget *map_widget;
-static GtkWidget *bottom_hpaned;
 
 PangoFontDescription *city_names_style = NULL;
 PangoFontDescription *city_productions_style = NULL;
@@ -225,6 +224,10 @@ static void allied_chat_button_toggled(GtkToggleButton *button,
 static void free_unit_table(void);
 
 static void adjust_default_options(void);
+
+static gboolean animation_tick_cb(GtkWidget *widget,
+                                  GdkFrameClock *frame_clock,
+                                  gpointer user_data);
 
 static float zoom_steps_custom[] = {
   -1.0, 0.13, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, -1.0
@@ -361,18 +364,21 @@ static void toplevel_focus(GtkWidget *w, GtkDirectionType arg,
 void main_message_area_resize(void *data)
 {
   if (get_current_client_page() == PAGE_GAME) {
-    static int old_width = 0, old_height = 0;
+    static int old_width = -1, old_height = -1;
     int width = gtk_widget_get_width(GTK_WIDGET(main_message_area));
     int height = gtk_widget_get_height(GTK_WIDGET(main_message_area));
 
     if (width != old_width
-        || height != old_height) {
+        || height != old_height || height == 0) {
+      /* XXX: At starts, we have a race condition with the chatline content
+       * recovery. It might consider that the bottom line is the first one,
+       * probably because gtk_widget_get_* calls returns 0. If you scroll up
+       * you will see the past content displayed.
+       */
       chatline_scroll_to_bottom(TRUE);
       old_width = width;
       old_height = height;
     }
-
-    add_idle_callback(main_message_area_resize, NULL);
   }
 }
 
@@ -436,45 +442,12 @@ static gboolean key_press_map_canvas(guint keyval, GdkModifierType state)
     }
   }
 
-  if (state & GDK_SHIFT_MASK) {
-    bool volchange = FALSE;
-
+  if (!(state & GDK_CONTROL_MASK)) {
     switch (keyval) {
-    case GDK_KEY_plus:
-    case GDK_KEY_KP_Add:
-      gui_options.sound_effects_volume += 10;
-      volchange = TRUE;
-      break;
-
-    case GDK_KEY_minus:
-    case GDK_KEY_KP_Subtract:
-      gui_options.sound_effects_volume -= 10;
-      volchange = TRUE;
-      break;
-
-    default:
-      break;
-    }
-
-    if (volchange) {
-      struct option *poption = optset_option_by_name(client_optset,
-                                                     "sound_effects_volume");
-
-      gui_options.sound_effects_volume = CLIP(0,
-                                              gui_options.sound_effects_volume,
-                                              100);
-      option_changed(poption);
-
-      return TRUE;
-    }
-  } else if (!(state & GDK_CONTROL_MASK)) {
-    switch (keyval) {
-    case GDK_KEY_plus:
     case GDK_KEY_KP_Add:
       zoom_step_up();
       return TRUE;
 
-    case GDK_KEY_minus:
     case GDK_KEY_KP_Subtract:
       zoom_step_down();
       return TRUE;
@@ -1012,7 +985,7 @@ void reset_unit_table(void)
   /* We have to force a redraw of the units. And we explicitly have
    * to force a redraw of the focus unit, which is normally only
    * redrawn when the focus changes. We also have to force the 'more'
-   * arrow to go away, both by expicitly hiding it and telling it to
+   * arrow to go away, both by explicitly hiding it and telling it to
    * do so (this will be reset immediately afterwards if necessary,
    * but we have to make the *internal* state consistent). */
   gtk_widget_set_visible(more_arrow, FALSE);
@@ -1280,7 +1253,7 @@ static void setup_widgets(void)
     gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(mc_gesture), 3);
     controller = GTK_EVENT_CONTROLLER(mc_gesture);
     g_signal_connect(controller, "pressed",
-		     G_CALLBACK(reverse_taxrates_callback), NULL);
+                     G_CALLBACK(reverse_taxrates_callback), NULL);
     gtk_widget_add_controller(econ_label[i], controller);
     gtk_grid_attach(GTK_GRID(table2), econ_label[i], i, 0, 1, 1);
   }
@@ -1515,6 +1488,9 @@ static void setup_widgets(void)
   g_signal_connect(map_canvas, "resize",
                    G_CALLBACK(map_canvas_resize), NULL);
 
+  /* Synchronize animation updates with the tick (improve performances) */
+  gtk_widget_add_tick_callback(map_canvas, animation_tick_cb, NULL, NULL);
+
   mc_controller = gtk_event_controller_key_new();
   g_signal_connect(mc_controller, "key-pressed",
                    G_CALLBACK(toplevel_key_press_handler), NULL);
@@ -1523,7 +1499,6 @@ static void setup_widgets(void)
   /* *** The message window -- this is a detachable widget *** */
 
   if (GUI_GTK_OPTION(message_chat_location) == GUI_GTK_MSGCHAT_MERGED) {
-    bottom_hpaned = paned;
     right_notebook = bottom_notebook = top_notebook;
   } else {
     GtkWidget *hpaned;
@@ -1548,7 +1523,6 @@ static void setup_widgets(void)
     gtk_widget_set_margin_end(hpaned, 4);
     gtk_widget_set_margin_start(hpaned, 4);
     gtk_widget_set_margin_top(hpaned, 4);
-    bottom_hpaned = hpaned;
 
     bottom_notebook = gtk_notebook_new();
     gtk_notebook_set_tab_pos(GTK_NOTEBOOK(bottom_notebook), GTK_POS_TOP);
@@ -1618,6 +1592,16 @@ static void setup_widgets(void)
   g_signal_connect(button, "clicked",
                    G_CALLBACK(link_marks_clear_all), NULL);
   inputline_toolkit_view_append_button(view, button);
+
+  /* These two signals doesn't seems to be triggered for now */
+  g_signal_connect(main_message_area, "notify::default-width",
+                                   G_CALLBACK(main_message_area_resize), NULL);
+  g_signal_connect(main_message_area, "notify::default-height",
+                                   G_CALLBACK(main_message_area_resize), NULL);
+
+  /* Use parent resize to triggers properly the resize */
+  g_signal_connect(map_canvas, "resize",
+                                   G_CALLBACK(main_message_area_resize), NULL);
 
   /* Other things to take care of */
 
@@ -2324,6 +2308,10 @@ static gboolean show_info_popup(GtkGestureClick *gesture, int n_press,
 **************************************************************************/
 static void end_turn_callback(GtkWidget *w, gpointer data)
 {
+  /* Button going insensitive is going to lose focus. Keep focus at least
+   * within the window */
+  gtk_widget_grab_focus(map_canvas);
+
   gtk_widget_set_sensitive(turn_done_button, FALSE);
   user_ended_turn();
 }
@@ -2485,14 +2473,16 @@ void add_idle_callback(void (callback)(void *), void *data)
 }
 
 /**********************************************************************//**
-  Add idle callback for updating animations.
+  Update animations if needed on the current GUI tick.
 **************************************************************************/
-void animation_idle_cb(void *data)
+static gboolean animation_tick_cb(GtkWidget *widget,
+                                  GdkFrameClock *frame_clock,
+                                  gpointer user_data)
 {
   if (get_current_client_page() == PAGE_GAME) {
     update_animation();
-    add_idle_callback(animation_idle_cb, NULL);
   }
+  return G_SOURCE_CONTINUE; /* keep animation call back running */
 }
 
 /**********************************************************************//**

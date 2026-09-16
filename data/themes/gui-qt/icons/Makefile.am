@@ -18,6 +18,7 @@ pkgdata_DATA =          	\
 	city-right.png		\
 	city-switch.png		\
 	control.png		\
+	clean.png		\
 	close.png		\
 	cunits.png		\
 	done.png		\
@@ -44,12 +45,12 @@ pkgdata_DATA =          	\
 	paradrop.png		\
 	plantforest.png		\
 	plus.png		\
-	pollution.png		\
 	preferences-other.png	\
 	research.png		\
 	resize.png		\
 	sentry.png		\
 	set_homecity.png	\
+	smiley.png		\
 	transform.png		\
 	units.png		\
 	unload.png		\

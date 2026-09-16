@@ -642,8 +642,8 @@ adv_want dai_effect_value(struct player *pplayer,
     /* Assume that this multiplies accumulation of 5 history points / turn */
     v += amount * 5 * 5 / 100;
     break;
-  case EFT_TECH_COST_FACTOR:
-    v -= amount * 50;
+  case EFT_TECH_COST_PCT:
+    v -= amount / 2;
     break;
   case EFT_TECH_LEAKAGE:
     {
@@ -905,6 +905,7 @@ bool dai_can_requirement_be_met_in_city(const struct requirement *preq,
   case VUT_EXTRAFLAG:
   case VUT_EXTRA:
   case VUT_TILEDEF:
+  case VUT_TILEDEF_CONNECTED:
     /* TODO: These could be determined by building a map of all
      *       possible futures (e.g. terrain transformations, etc.),
      *       and traversing it for all tiles in largest possible range

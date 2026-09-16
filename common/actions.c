@@ -3007,6 +3007,17 @@ static bool is_action_enabled(const struct civ_map *nmap,
     return FALSE;
   }
 
+  return action_enablers_allow(wanted_action, actor, target);
+}
+
+/**********************************************************************//**
+  Returns whether action enablers would allow action,
+  assuming hard requirements do.
+**************************************************************************/
+bool action_enablers_allow(const action_id wanted_action,
+                           const struct req_context *actor,
+                           const struct req_context *target)
+{
   action_enabler_list_iterate(action_enablers_for_action(wanted_action),
                               enabler) {
     if (is_enabler_active(enabler, actor, target)) {
@@ -7541,4 +7552,78 @@ struct action_list *action_list_by_activity(enum unit_activity activity)
   fc_assert(activity < ACTIVITY_LAST);
 
   return actlist_by_activity[activity];
+}
+
+/************************************************************************//**
+  Can unit do any action with the given action result to stack?
+  Returns one of the possible actions, or ACTION_NONE.
+****************************************************************************/
+enum gen_action select_actres_action_unit_on_stack(struct civ_map *nmap,
+                                                   enum action_result actres,
+                                                   struct unit *punit,
+                                                   struct tile *ptile)
+{
+  if (actres >= ACTRES_LAST) {
+    return ACTION_NONE;
+  }
+
+  action_list_iterate(action_list_by_result(actres), paction) {
+    enum gen_action act = action_number(paction);
+
+    if (is_action_enabled_unit_on_stack(nmap, act, punit, ptile)) {
+      return act;
+    }
+  } action_list_iterate_end;
+
+  return ACTION_NONE;
+}
+
+/************************************************************************//**
+  Can unit do any action with the given action result to tile?
+  Returns one of the possible actions, or ACTION_NONE.
+****************************************************************************/
+enum gen_action select_actres_action_unit_on_tile(struct civ_map *nmap,
+                                                  enum action_result actres,
+                                                  struct unit *punit,
+                                                  struct tile *ptile)
+{
+  if (actres >= ACTRES_LAST) {
+    return ACTION_NONE;
+  }
+
+  action_list_iterate(action_list_by_result(actres), paction) {
+    enum gen_action act = action_number(paction);
+
+    if (action_id_get_target_kind(act) == ATK_TILE
+        && is_action_enabled_unit_on_tile(nmap, act, punit, ptile, nullptr)) {
+      return act;
+    }
+  } action_list_iterate_end;
+
+  return ACTION_NONE;
+}
+
+/************************************************************************//**
+  Can unit do any action with the given action result to city?
+  Returns one of the possible actions, or ACTION_NONE.
+****************************************************************************/
+enum gen_action select_actres_action_unit_on_city(struct civ_map *nmap,
+                                                  enum action_result actres,
+                                                  struct unit *punit,
+                                                  struct city *pcity)
+{
+  if (actres >= ACTRES_LAST) {
+    return ACTION_NONE;
+  }
+
+  action_list_iterate(action_list_by_result(actres), paction) {
+    enum gen_action act = action_number(paction);
+
+    if (action_id_get_target_kind(act) == ATK_CITY
+        && is_action_enabled_unit_on_city(nmap, act, punit, pcity)) {
+      return act;
+    }
+  } action_list_iterate_end;
+
+  return ACTION_NONE;
 }

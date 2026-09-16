@@ -169,7 +169,7 @@ void dai_player_copy(struct ai_type *ait,
 }
 
 /**********************************************************************//**
-  Ai got control of the player.
+  AI got control of the player.
 **************************************************************************/
 void dai_gained_control(struct ai_type *ait, struct player *pplayer)
 {

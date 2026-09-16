@@ -10,6 +10,8 @@
 #define LUASQL_API
 #endif
 
+#define LUASQL_VERSION_NUMBER "2.8.1"
+
 #if !defined LUA_VERSION_NUM
 /* Lua 5.0 */
 #define luaL_Reg luaL_reg
@@ -24,6 +26,13 @@
 #define LUASQL_CONNECTION "Each driver must have a connection metatable"
 #define LUASQL_CURSOR "Each driver must have a cursor metatable"
 
+// Macro to handle userdata creation across Lua versions
+#if LUA_VERSION_NUM >= 504
+#define LUASQL_NEWUD(L, size) lua_newuserdatauv(L, size, 0)
+#else
+#define LUASQL_NEWUD(L, size) lua_newuserdata(L, size)
+#endif
+
 LUASQL_API int luasql_faildirect (lua_State *L, const char *err);
 LUASQL_API int luasql_failmsg (lua_State *L, const char *err, const char *m);
 LUASQL_API int luasql_createmeta (lua_State *L, const char *name, const luaL_Reg *methods);
@@ -35,6 +44,7 @@ void luaL_setfuncs (lua_State *L, const luaL_Reg *l, int nup);
 #endif
 
 /* Driver initialization functions prototypes */
+LUASQL_API int luaopen_luasql_duckdb (lua_State *L);
 LUASQL_API int luaopen_luasql_firebird (lua_State *L);
 LUASQL_API int luaopen_luasql_mysql (lua_State *L);
 LUASQL_API int luaopen_luasql_oci8 (lua_State *L);

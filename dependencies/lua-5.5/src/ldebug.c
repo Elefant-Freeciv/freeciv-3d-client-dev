@@ -184,7 +184,7 @@ static const char *upvalname (const Proto *p, int uv) {
 
 
 static const char *findvararg (CallInfo *ci, int n, StkId *pos) {
-  if (clLvalue(s2v(ci->func.p))->p->flag & PF_ISVARARG) {
+  if (clLvalue(s2v(ci->func.p))->p->flag & PF_VAHID) {
     int nextra = ci->u.l.nextraargs;
     if (n >= -nextra) {  /* 'n' is negative */
       *pos = ci->func.p - nextra - (n + 1);
@@ -291,7 +291,7 @@ static int nextline (const Proto *p, int currentline, int pc) {
 
 static void collectvalidlines (lua_State *L, Closure *f) {
   if (!LuaClosure(f)) {
-    setnilvalue(s2v(L->top.p));
+    setnilvalue2s(L->top.p);
     api_incr_top(L);
   }
   else {
@@ -304,7 +304,7 @@ static void collectvalidlines (lua_State *L, Closure *f) {
       int i;
       TValue v;
       setbtvalue(&v);  /* boolean 'true' to be the value of all indices */
-      if (!(p->flag & PF_ISVARARG))  /* regular function? */
+      if (!(isvararg(p)))  /* regular function? */
         i = 0;  /* consider all instructions */
       else {  /* vararg function */
         lua_assert(GET_OPCODE(p->code[0]) == OP_VARARGPREP);
@@ -348,7 +348,7 @@ static int auxgetinfo (lua_State *L, const char *what, lua_Debug *ar,
           ar->nparams = 0;
         }
         else {
-          ar->isvararg = (f->l.p->flag & PF_ISVARARG) ? 1 : 0;
+          ar->isvararg = (isvararg(f->l.p)) ? 1 : 0;
           ar->nparams = f->l.p->numparams;
         }
         break;
@@ -580,7 +580,7 @@ static const char *getobjname (const Proto *p, int lastpc, int reg,
         kname(p, k, name);
         return isEnv(p, lastpc, i, 1);
       }
-      case OP_GETTABLE: {
+      case OP_GETTABLE: case OP_GETVARG: {
         int k = GETARG_C(i);  /* key index */
         rname(p, lastpc, k, name);
         return isEnv(p, lastpc, i, 0);
@@ -912,7 +912,7 @@ int luaG_tracecall (lua_State *L) {
   Proto *p = ci_func(ci)->p;
   ci->u.l.trap = 1;  /* ensure hooks will be checked */
   if (ci->u.l.savedpc == p->code) {  /* first instruction (not resuming)? */
-    if (p->flag & PF_ISVARARG)
+    if (isvararg(p))
       return 0;  /* hooks will start at VARARGPREP instruction */
     else if (!(ci->callstatus & CIST_HOOKYIELD))  /* not yielded? */
       luaD_hookcall(L, ci);  /* check 'call' hook */

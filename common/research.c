@@ -928,8 +928,8 @@ int research_total_bulbs_required(const struct research *presearch,
   research_players_iterate(presearch, pplayer) {
     members++;
     total_cost += (base_cost
-                   * get_player_bonus(pplayer, EFT_TECH_COST_FACTOR));
-    if (!leakage && get_player_bonus(pplayer, EFT_TECH_LEAKAGE)) {
+                   * get_player_bonus(pplayer, EFT_TECH_COST_PCT) / 100);
+    if (!leakage && get_player_bonus(pplayer, EFT_TECH_LEAKAGE) > 0) {
       leakage = TRUE;
     }
   } research_players_iterate_end;
@@ -1074,7 +1074,7 @@ int player_tech_upkeep(const struct player *pplayer)
   total_research_factor = 0.0;
   members = 0;
   research_players_iterate(presearch, contributor) {
-    total_research_factor += (get_player_bonus(contributor, EFT_TECH_COST_FACTOR)
+    total_research_factor += (get_player_bonus(contributor, EFT_TECH_COST_PCT) / 100.0
                               + (is_ai(contributor)
                                  ? contributor->ai_common.science_cost / 100.0
                                  : 1));

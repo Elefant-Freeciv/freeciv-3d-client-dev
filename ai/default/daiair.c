@@ -65,8 +65,10 @@ static inline int regen_turns(struct unit *punit, struct tile *ptile,
   recov = get_unit_bonus(punit, EFT_UNIT_RECOVER);
   if (lost_hp - recov <= 0) {
     res = 0;
-  } else {
+  } else if (recov + regen > 0) {
     res = 1 + (lost_hp - recov) / (recov + regen);
+  } else {
+    return MAX_UINT32;
   }
   punit->tile = real_tile;
 
@@ -624,7 +626,7 @@ bool dai_choose_attacker_air(struct ai_type *ait, const struct civ_map *nmap,
       continue;
     }
 
-    if (can_city_build_unit_now(nmap, pcity, punittype)) {
+    if (can_city_build_unit_now(nmap, pcity, punittype, RPT_CERTAIN)) {
       struct unit *virtual_unit =
        unit_virtual_create(
           pplayer, pcity, punittype,

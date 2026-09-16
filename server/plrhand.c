@@ -2354,6 +2354,13 @@ void make_contact(struct player *pplayer1, struct player *pplayer2,
       || team_has_embassy(pplayer2->team, pplayer1)) {
     return; /* Avoid sending too much info over the network */
   }
+  /* Send correct info about players to each other
+   * before sending updated contact info to each player.
+   * This makes sure that the client does not assume that
+   * it already has contact provided info, when it actually
+   * is only going to get it in the next packet. */
+  send_player_info_c(pplayer1, pplayer2->connections);
+  send_player_info_c(pplayer2, pplayer1->connections);
   send_player_all_c(pplayer1, pplayer1->connections);
   send_player_all_c(pplayer2, pplayer2->connections);
 }
@@ -2365,6 +2372,7 @@ void maybe_make_contact(struct tile *ptile, struct player *pplayer)
 {
   square_iterate(&(wld.map), ptile, 1, tile1) {
     struct city *pcity = tile_city(tile1);
+
     if (pcity) {
       make_contact(pplayer, city_owner(pcity), ptile);
     }

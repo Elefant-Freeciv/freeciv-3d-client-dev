@@ -25,6 +25,7 @@
 #include <QResizeEvent>
 #include <QScrollBar>
 #include <QSettings>
+#include <QShortcut>
 #include <QSocketNotifier>
 #include <QSpinBox>
 #include <QStackedLayout>
@@ -250,6 +251,8 @@ fc_client::~fc_client()
 ****************************************************************************/
 void fc_client::fc_main(QApplication *qapp)
 {
+  QShortcut *quit_shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q), this);
+
   qRegisterMetaType<QTextCursor>("QTextCursor");
   qRegisterMetaType<QTextBlock>("QTextBlock");
   fc_allocate_ow_mutex();
@@ -260,6 +263,7 @@ void fc_client::fc_main(QApplication *qapp)
   set_client_state(C_S_DISCONNECTED);
 
   startTimer(TIMER_INTERVAL);
+  connect(quit_shortcut, &QShortcut::activated, this, &fc_client::quit);
   connect(qapp, &QCoreApplication::aboutToQuit, this, &fc_client::closing);
   qapp->exec();
 
@@ -748,7 +752,12 @@ void fc_client::read_settings()
     qt_settings.battlelog_y = 0.0;
   }
   qt_settings.player_repo_sort_col = -1;
-  qt_settings.city_repo_sort_col = -1;
+
+  if (s.contains("city_repo_columns")) {
+    qt_settings.city_repo_columns = s.value("city_repo_columns").toByteArray();
+  } else {
+    qt_settings.city_repo_columns = QByteArray();
+  }
 
   if (qt_settings.chat_fx_pos < 0 || qt_settings.chat_fx_pos >= 1) {
     qt_settings.chat_fx_pos = 0.0;
@@ -813,6 +822,7 @@ void fc_client::write_settings()
   s.setValue("battlelog_y", qt_settings.battlelog_y);
   s.setValue("new_turn_text", qt_settings.show_new_turn_text);
   s.setValue("show_battle_log", qt_settings.show_battle_log);
+  s.setValue("city_repo_columns", qt_settings.city_repo_columns);
   write_shortcuts();
 }
 

@@ -803,7 +803,7 @@ bool api_methods_player_can_build_unit_direct(lua_State *L, Player *pplayer,
   LUASCRIPT_CHECK_SELF(L, pplayer, FALSE);
   LUASCRIPT_CHECK_ARG_NIL(L, utype, 3, Unit_Type, FALSE);
 
-  return can_player_build_unit_direct(pplayer, utype, TRUE);
+  return can_player_build_unit_direct(pplayer, utype, RPT_CERTAIN, TRUE);
 }
 
 /**********************************************************************//**
@@ -816,7 +816,7 @@ bool api_methods_player_can_build_impr_direct(lua_State *L, Player *pplayer,
   LUASCRIPT_CHECK_SELF(L, pplayer, FALSE);
   LUASCRIPT_CHECK_ARG_NIL(L, itype, 3, Building_Type, FALSE);
 
-  return can_player_build_improvement_direct(pplayer, itype);
+  return can_player_build_improvement_direct(pplayer, itype, RPT_CERTAIN);
 }
 
 /**********************************************************************//**
@@ -1249,6 +1249,17 @@ int api_methods_tile_map_y(lua_State *L, Tile *ptile)
   LUASCRIPT_CHECK_SELF(L, ptile, -1);
 
   return index_to_map_pos_y(tile_index(ptile));
+}
+
+/**********************************************************************//**
+  Return the latitude of the tile.
+**************************************************************************/
+int api_methods_tile_latitude(lua_State *L, Tile *ptile)
+{
+  LUASCRIPT_CHECK_STATE(L, MAP_MAX_LATITUDE + 1);
+  LUASCRIPT_CHECK_SELF(L, ptile, MAP_MAX_LATITUDE + 1);
+
+  return map_signed_latitude(ptile);
 }
 
 /**********************************************************************//**
