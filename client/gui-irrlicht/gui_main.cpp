@@ -314,8 +314,12 @@ int irrg_ui_main(int argc, char *argv[])
         irrg_diag_map();
       }
       /* FC_IRR_TESTLOAD=1: skip the 3D build so the "Loading map" progress
-       * screen stays up (is_built() false) for a headless screenshot. */
-      if (map3d && !irrg_map3d_is_built() && !std::getenv("FC_IRR_TESTLOAD")) {
+       * screen stays up (is_built() false) for a headless screenshot.
+       * FC_IRR_TESTLOAD_RETRY=1: skip the INIT build but let the per-frame
+       * RETRY (step 0d2) build it -- reproduces the 'terrain still downloading
+       * at init' case to verify the loading screen then resolves (no hang). */
+      if (map3d && !irrg_map3d_is_built()
+          && !std::getenv("FC_IRR_TESTLOAD") && !std::getenv("FC_IRR_TESTLOAD_RETRY")) {
         /* The 3D build iterates the whole map + copies meshes; give the map a
          * frame or two to settle, then build once. */
         if (irrg_map3d_build()) {
@@ -367,6 +371,16 @@ int irrg_ui_main(int argc, char *argv[])
      * hooks (SPAWNCITY / CITYDLG / DIAGUNIT). mapview.store is maintained in
      * 3D too (map_canvas_resized + per-frame unqueue), so these are safe. */
     if (client_state() == C_S_RUNNING && map_initialized) {
+      /* 3D build RETRY: the init-time build (step 0d) is attempted only once,
+       * and can fail if the map terrain hasn't finished arriving yet (the
+       * explored area is still downloading from the server). That would leave
+       * is_built() false forever -> the "Loading map" screen hangs. So retry
+       * each frame until the terrain is present and the mesh builds (the heavy
+       * build runs once; failed attempts are a cheap O(map) terrain scan). */
+      if (map3d && !irrg_map3d_is_built() && !std::getenv("FC_IRR_TESTLOAD")) {
+        if (irrg_map3d_build())
+          irrg_log("3D map built (retry, after map terrain arrived).");
+      }
       bool is_obs = client_is_global_observer();
       if (is_obs != was_observer) {
         irrg_log(is_obs
@@ -739,7 +753,12 @@ int irrg_ui_main(int argc, char *argv[])
         /* Blend in a time-based floor so the bar always advances (for a fog
          * player the tile fraction is the small explored area and would
          * otherwise look stuck). Reaches ~90% after ~1.5s of loading. */
-        float tfrac = (float)l_frame / 90.0f; if (tfrac > 0.9f) tfrac = 0.9f;
+        /* Gentle time-based floor: nudge the bar a little early (a fog player
+         * has only a small explored area, so the tile fraction alone sits low).
+         * Capped LOW (20%) -- NOT 90% -- so a slow download reads as "still
+         * early", never as "stuck at 90%". The real tile fraction overtakes it
+         * for full-map (observer) downloads. */
+        float tfrac = (float)l_frame / 180.0f; if (tfrac > 0.2f) tfrac = 0.2f;
         if (tfrac > prog) prog = tfrac;
         irrg_canvas_put_rectangle(lcv, &l_bg, 0, 0, W, H);
         const char *t1 = "Loading map";
