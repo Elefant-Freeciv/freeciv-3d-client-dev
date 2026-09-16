@@ -264,20 +264,14 @@ void irrg_draw_city_dialog(struct canvas *cv)
 
   const int list_h = CITY_PROD_SHOW * 20;
   const int bw = 470, bh = 210 + list_h;
-  const int bx = cv->width - bw - 14, by = 14;
+  const int bx = cv->width - bw - 14, by = 40;   /* below the Civ4 header bar */
   g_cd_x = bx; g_cd_y = by; g_cd_w = bw; g_cd_h = bh;
   g_cd_close_x = bx + bw - 36; g_cd_close_y = by + 6;
   g_cd_close_w = 30; g_cd_close_h = 22;
-  static struct color c_sel   = {  70,  90, 150 };  /* selected row bg   */
-  static struct color c_cur   = { 120, 210, 120 };  /* current prod mark */
-  static struct color c_hdr   = { 170, 190, 230 };  /* section header    */
+  struct irrg_civ_pal P = irrg_civ();
 
-  /* Panel + border. */
-  canvas_put_rectangle(cv, &c_bg,     bx,     by,     bw, bh);
-  canvas_put_rectangle(cv, &c_border, bx,     by,     bw, 2);
-  canvas_put_rectangle(cv, &c_border, bx,     by + bh - 2, bw, 2);
-  canvas_put_rectangle(cv, &c_border, bx,     by,     2,  bh);
-  canvas_put_rectangle(cv, &c_border, bx + bw - 2, by, 2,  bh);
+  /* Civ4 beveled panel with the city name in the gold header. */
+  int ty = irrg_civ_panel(cv, bx, by, bw, bh, city_name_get(c)) + 2;
 
   /* Close button (top-right): a mouse affordance for dismissing the dialog. */
   {
@@ -293,15 +287,10 @@ void irrg_draw_city_dialog(struct canvas *cv)
   }
 
   char line[180], out[64];
-  int ty = by + 12;
-
-  canvas_put_text(cv, bx + 12, ty, FONT_CITY_NAME, &c_yellow,
-                  city_name_get(c));
-  ty += 42;   /* city name renders at 2x (38px tall) */
 
   std::snprintf(line, sizeof(line), "Population: %d   Size: %d",
                 city_population(c), (int)city_size_get(c));
-  canvas_put_text(cv, bx + 12, ty, FONT_REQTREE_TEXT, &c_white, line);
+  canvas_put_text(cv, bx + 12, ty, FONT_REQTREE_TEXT, &P.text, line);
   ty += 22;
 
   /* get_city_dialog_output_text() returns a multi-line breakdown (total +
@@ -318,23 +307,23 @@ void irrg_draw_city_dialog(struct canvas *cv)
   if (char *nl = std::strchr(sciout, '\n')) *nl = '\0';
   std::snprintf(line, sizeof(line), "Food: %s   Shields: %s   Science: %s",
                 foodout, shdout, sciout);
-  canvas_put_text(cv, bx + 12, ty, FONT_REQTREE_TEXT, &c_body, line);
+  canvas_put_text(cv, bx + 12, ty, FONT_REQTREE_TEXT, &P.text, line);
   ty += 24;
 
-  /* Current production line. */
+  /* Current production line (green). */
   char prodfull[160];
   get_city_dialog_production_full(prodfull, sizeof(prodfull), &c->production, c);
-  canvas_put_text(cv, bx + 12, ty, FONT_REQTREE_TEXT, &c_cur,
+  canvas_put_text(cv, bx + 12, ty, FONT_REQTREE_TEXT, &P.green,
                   (std::string("Building: ") + prodfull).c_str());
   ty += 24;
 
-  /* Production menu header. */
-  canvas_put_rectangle(cv, &c_border, bx, ty, bw, 1);
-  ty += 6;
+  /* Production menu header (gold section divider + label). */
+  canvas_put_rectangle(cv, &P.gold_lo, bx + 8, ty, bw - 16, 1);
+  ty += 8;
   char hdline[96];
   std::snprintf(hdline, sizeof(hdline),
                 "Start building (click a row): %d available", g_cp_n);
-  canvas_put_text(cv, bx + 12, ty, FONT_REQTREE_TEXT, &c_hdr, hdline);
+  canvas_put_text(cv, bx + 12, ty, FONT_REQTREE_TEXT, &P.gold_hi, hdline);
   ty += 22;
 
   /* Buildable list (scrollable). */
@@ -345,13 +334,13 @@ void irrg_draw_city_dialog(struct canvas *cv)
     int idx = g_cp_scroll + i;
     if (idx >= g_cp_n) break;
     int ry = ty + i * 20;
-    if (idx == g_cp_sel)
-      canvas_put_rectangle(cv, &c_sel, list_x, ry, list_w, 18);
-    struct color *tc = (idx == g_cp_sel) ? &c_yellow : &c_body;
+    if (idx == g_cp_sel)                                   /* gold highlight  */
+      canvas_put_rectangle(cv, &P.btn_hi, list_x, ry, list_w, 18);
+    struct color *tc = (idx == g_cp_sel) ? &P.hdr_tx : &P.text;
     bool is_cur = are_universals_equal(&g_cp_list[idx], &c->production);
     int tx = list_x + 4;
     if (is_cur) {                      /* mark the current production with >> */
-      canvas_put_text(cv, list_x + 4, ry + 1, FONT_REQTREE_TEXT, &c_cur, ">>");
+      canvas_put_text(cv, list_x + 4, ry + 1, FONT_REQTREE_TEXT, &P.green, ">>");
       tx = list_x + 26;
     }
     canvas_put_text(cv, tx, ry + 1, FONT_REQTREE_TEXT, tc, g_cp_name[idx]);
@@ -361,7 +350,7 @@ void irrg_draw_city_dialog(struct canvas *cv)
   /* Footer (kept short so it fits the 470px-wide panel; mouse clicks work, the
    * arrow keys are the fallback -- Irrlicht 1.8.5 has no PgUp/PgDn). */
   canvas_put_text(cv, bx + 12, by + bh - 22, FONT_REQTREE_TEXT,
-                  &c_yellow, "[click a row:build]   [X:close]");
+                  &P.text_dim, "[click a row:build]   [X:close]");
 }
 
 /* ==================================================================
