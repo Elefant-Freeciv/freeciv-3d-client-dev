@@ -264,7 +264,7 @@ void irrg_draw_city_dialog(struct canvas *cv)
   struct city *c = g_city_dlg;
 
   const int list_h = CITY_PROD_SHOW * 20;
-  const int bw = 470, bh = 210 + list_h;
+  const int bw = 470, bh = 232 + list_h;   /* +22: the home-tile yield line */
   const int bx = cv->width - bw - 14, by = 40;   /* below the Civ4 header bar */
   g_cd_x = bx; g_cd_y = by; g_cd_w = bw; g_cd_h = bh;
   g_cd_close_x = bx + bw - 36; g_cd_close_y = by + 6;
@@ -309,7 +309,23 @@ void irrg_draw_city_dialog(struct canvas *cv)
   std::snprintf(line, sizeof(line), "Food: %s   Shields: %s   Science: %s",
                 foodout, shdout, sciout);
   canvas_put_text(cv, bx + 12, ty, FONT_REQTREE_TEXT, &P.text, line);
-  ty += 24;
+  ty += 22;
+
+  /* Home-tile yield: the food/shield/commerce the city's own tile produces
+   * (base terrain + resource + irrigation + mining + roads), via
+   * city_tile_output(). */
+  {
+    struct tile *ct = city_tile(c);
+    if (ct) {
+      int tf = city_tile_output(nullptr, ct, false, O_FOOD);
+      int ts = city_tile_output(nullptr, ct, false, O_SHIELD);
+      int tc = city_tile_output(nullptr, ct, false, O_TRADE);
+      std::snprintf(line, sizeof(line),
+                    "Home tile yield:  Food %d   Shield %d   Comm %d", tf, ts, tc);
+      canvas_put_text(cv, bx + 12, ty, FONT_REQTREE_TEXT, &P.text, line);
+      ty += 22;
+    }
+  }
 
   /* Current production line (green). */
   char prodfull[160];
@@ -562,6 +578,7 @@ static void irrg_draw_unit_dialog(struct canvas *cv)
   const char *owner = fu->owner ? player_name(fu->owner) : "";
 
   char l_hp[120], l_mv[120], l_act[120], l_own[120], l_extra[120];
+  char l_yield[120];
   std::snprintf(l_hp,  sizeof(l_hp),  "HP: %d / %d", fu->hp, ut ? ut->hp : 100);
   std::snprintf(l_mv,  sizeof(l_mv),  "Moves: %d", fu->moves_left);
   std::snprintf(l_act, sizeof(l_act), "Activity: %s", get_activity_text(fu->activity));
@@ -575,9 +592,23 @@ static void irrg_draw_unit_dialog(struct canvas *cv)
   else
     l_extra[0] = '\0';
 
-  const int line = 20, pad = 8, W = 272;
+  /* Tile yield: shown for a settler (a unit that can found a city) so the
+   * player can choose where to settle. city_tile_output() gives the tile's
+   * base food/shield/commerce (+ resource, irrigation, mining, roads). */
+  bool show_yield = (fu->tile && unit_can_do_action(fu, ACTION_FOUND_CITY));
+  if (show_yield) {
+    int tf = city_tile_output(nullptr, fu->tile, false, O_FOOD);
+    int ts = city_tile_output(nullptr, fu->tile, false, O_SHIELD);
+    int tc = city_tile_output(nullptr, fu->tile, false, O_TRADE);
+    std::snprintf(l_yield, sizeof(l_yield), "Tile: Food %d  Shield %d  Comm %d",
+                  tf, ts, tc);
+  } else {
+    l_yield[0] = '\0';
+  }
+
+  const int line = 20, pad = 8, W = 300;
   const int hdr_h = 24;   /* the civ panel header height */
-  int datalines = 4 + (l_extra[0] ? 1 : 0);   /* 4 lines + optional extra */
+  int datalines = 4 + (l_extra[0] ? 1 : 0) + (show_yield ? 1 : 0);
   int H = hdr_h + 6 + datalines * line + 6;   /* header + data + padding */
   int x = 8, y = cv->height - H - 8;
   g_udlg_x = x; g_udlg_y = y; g_udlg_w = W; g_udlg_h = H;   /* for click hit-test */
@@ -589,7 +620,11 @@ static void irrg_draw_unit_dialog(struct canvas *cv)
   canvas_put_text(cv, x + pad, ty, FONT_REQTREE_TEXT, &c_utx, l_act); ty += line;
   canvas_put_text(cv, x + pad, ty, FONT_REQTREE_TEXT, &c_utx, l_own); ty += line;
   if (l_extra[0])
-    canvas_put_text(cv, x + pad, ty, FONT_REQTREE_TEXT, &c_utx, l_extra);
+    canvas_put_text(cv, x + pad, ty, FONT_REQTREE_TEXT, &c_utx, l_extra), ty += line;
+  if (show_yield) {
+    static struct color c_yld = { 168, 205, 140 };   /* soft green for yield */
+    canvas_put_text(cv, x + pad, ty, FONT_REQTREE_TEXT, &c_yld, l_yield);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -792,6 +827,26 @@ int irrg_minimap_hit(int x, int y, int *out_tx, int *out_ty)
 /* Civ4 top header bar: [ Turn N ]  [ research progress bar ]  [ date ]. A
  * full-width dark bar with a gold bottom edge. The Menu / End Turn buttons and
  * the unit/city counter are drawn just below it (see irrg_draw_dialogs). */
+/* The green research progress bar (header centre) is a clickable shortcut to
+ * the tech research selector (irrg_research). Its rect is stored during draw so
+ * a click can be hit-tested. */
+static int g_rpb_x = 0, g_rpb_y = 0, g_rpb_w = 0, g_rpb_h = 0;
+static int g_rpb_mx = -1, g_rpb_my = -1;
+
+bool irrg_researchbar_hit(int mx, int my)
+{
+  if (client_state() != C_S_RUNNING) return false;
+  if (g_rpb_w <= 0) return false;
+  return (mx >= g_rpb_x && mx < g_rpb_x + g_rpb_w
+          && my >= g_rpb_y && my < g_rpb_y + g_rpb_h);
+}
+
+void irrg_researchbar_mouse_move(int mx, int my)
+{
+  g_rpb_mx = mx;
+  g_rpb_my = my;
+}
+
 #define IRRG_HEADER_H 34
 static void irrg_draw_header_bar(struct canvas *cv)
 {
@@ -831,6 +886,16 @@ static void irrg_draw_header_bar(struct canvas *cv)
     }
   }
   irrg_civ_bar(cv, barX, barY, barW, barH, frac, &P.green, tech);
+  /* Store the bar rect (a click on it opens the research selector) + a subtle
+   * gold hover border so it reads as clickable. */
+  g_rpb_x = barX; g_rpb_y = barY; g_rpb_w = barW; g_rpb_h = barH;
+  if (g_rpb_mx >= barX && g_rpb_mx < barX + barW
+      && g_rpb_my >= barY && g_rpb_my < barY + barH) {
+    canvas_put_rectangle(cv, &P.gold_hi, barX - 1, barY - 1, barW + 2, 1);
+    canvas_put_rectangle(cv, &P.gold_hi, barX - 1, barY + barH, barW + 2, 1);
+    canvas_put_rectangle(cv, &P.gold_hi, barX - 1, barY, 1, barH + 2);
+    canvas_put_rectangle(cv, &P.gold_hi, barX + barW, barY - 1, 1, barH + 2);
+  }
 
   /* Right: the in-game date. */
   const char *date = textyear(game.info.year);
@@ -850,21 +915,12 @@ void irrg_draw_dialogs(struct canvas *cv)
   if (g_report_open) irrg_draw_report(cv);
   if (g_help_open)   irrg_draw_help(cv);
   if (g_log_open)    irrg_draw_messages_panel(cv);
-  /* Persistent shortcut hint (in-game only): keeps every action discoverable,
-   * not just a hidden key. ESC opens the in-game menu (the full action list). */
+  /* Persistent unit/city counter (in-game only): always shows how many you
+   * have, so an empty-looking (fog-covered) map can't be mistaken for 'no
+   * units/cities'. With no city, hint at the first thing to do (found one). */
   if (client_state() == C_S_RUNNING) {
-    static struct color c_hinttx = { 200, 205, 215 };
     static struct color c_hintbg = { 24, 26, 32 };
     static struct color c_hinthy = { 130, 215, 130 };
-    const char *s = "Menu + End Turn: top-right   |   click unit: select, click tile: move   |   drag: pan, wheel: zoom";
-    int tw = 0, th = 0;
-    irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, s);
-    canvas_put_rectangle(cv, &c_hintbg, 5, 40, tw + 6, th + 4);
-    canvas_put_text(cv, 8, 42, FONT_REQTREE_TEXT, &c_hinttx, s);
-
-    /* Persistent unit/city counter: always shows how many you have, so an
-     * empty-looking (fog-covered) map can't be mistaken for 'no units/cities'.
-     * With no city, hint at the first thing to do (found one). */
     const struct player *me = client_player();
     int nu = (me && me->units)  ? unit_list_size(me->units)  : 0;
     int nc = (me && me->cities) ? city_list_size(me->cities) : 0;
@@ -877,8 +933,8 @@ void irrg_draw_dialogs(struct canvas *cv)
       std::snprintf(line2, sizeof(line2), "Units: %d   Cities: %d", nu, nc);
     int tw2 = 0, th2 = 0;
     irrg_get_text_size(&tw2, &th2, FONT_REQTREE_TEXT, line2);
-    canvas_put_rectangle(cv, &c_hintbg, 5, 40 + th + 6, tw2 + 6, th2 + 4);
-    canvas_put_text(cv, 8, 40 + th + 8, FONT_REQTREE_TEXT, &c_hinthy, line2);
+    canvas_put_rectangle(cv, &c_hintbg, 5, 40, tw2 + 6, th2 + 4);
+    canvas_put_text(cv, 8, 42, FONT_REQTREE_TEXT, &c_hinthy, line2);
   }
 
   /* End Turn + Menu buttons (top-right) -- always available in-game; the Menu

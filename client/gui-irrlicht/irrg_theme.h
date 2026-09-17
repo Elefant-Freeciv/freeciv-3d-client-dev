@@ -44,9 +44,11 @@ void irrg_civ_frame(struct canvas *cv, int x, int y, int w, int h);
  * panel content should start (below the header when a title is given). */
 int  irrg_civ_panel(struct canvas *cv, int x, int y, int w, int h, const char *title);
 
-/* A beveled gold/dark button. `disabled` greys it out. */
+/* A beveled gold/dark button. `disabled` greys it out; `pressed` (default
+ * false) gives a sunken (mouse-button-held) look. */
 void irrg_civ_button(struct canvas *cv, int x, int y, int w, int h,
-                     const char *label, bool hovered, bool disabled);
+                     const char *label, bool hovered, bool disabled,
+                     bool pressed = false);
 
 /* A Civ4-style progress bar (dark inset + coloured fill + gold frame) with an
  * optional centred label. `frac` is clamped to [0,1]. */

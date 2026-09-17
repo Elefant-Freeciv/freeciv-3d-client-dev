@@ -41,6 +41,8 @@ static int   g_ai      = 6;
 static int   g_diff    = 1;       /* Normal */
 static bool  g_start   = false;
 static bool  g_cancel  = false;
+static int   g_mx = -1, g_my = -1;   /* mouse position (hover highlight) */
+static int   g_pressed = -1;          /* row the mouse is held on (-1 = none) */
 
 /* (All colours now come from the shared Civ4 palette -- irrg_theme.h / irrg_civ().) */
 
@@ -51,6 +53,34 @@ static void row_rect(int i, int *x, int *y, int *w, int *h)
   *y = g_H / 2 - 150 + i * 54;
   *w = rw;
   *h = rh;
+}
+
+static bool row_hover(int i)
+{
+  int rx, ry, rw, rh;
+  row_rect(i, &rx, &ry, &rw, &rh);
+  return (g_mx >= rx && g_mx < rx + rw && g_my >= ry && g_my < ry + rh);
+}
+
+void irrg_newgame_on_mouse_move(int x, int y)
+{
+  if (!g_active) return;
+  g_mx = x; g_my = y;
+}
+
+void irrg_newgame_on_mouse_down(int x, int y)
+{
+  if (!g_active) return;
+  g_mx = x; g_my = y;
+  g_pressed = -1;
+  for (int i = 0; i < ROW_COUNT; i++)
+    if (row_hover(i)) { g_pressed = i; g_sel = i; break; }
+}
+
+void irrg_newgame_on_mouse_up(int x, int y)
+{
+  g_mx = x; g_my = y;
+  g_pressed = -1;
 }
 
 void irrg_newgame_update(bool active, int win_w, int win_h)
@@ -179,10 +209,11 @@ void irrg_newgame_draw(struct canvas *cv, int win_w, int win_h)
   for (int i = 0; i < ROW_COUNT; i++) {
     int rx, ry, rw, rh;
     row_rect(i, &rx, &ry, &rw, &rh);
-    bool sel = (g_sel == i);
+    bool sel = (g_sel == i) || row_hover(i);   /* keyboard OR mouse hover */
+    bool pressed = (g_pressed == i);            /* mouse held on this row */
     if (i <= ROW_DIFF) {
       /* Option row: beveled dark; gold-framed + left accent when selected. */
-      struct color fill = sel ? P.btn_hi : P.bg;
+      struct color fill = pressed ? P.bg_dark : (sel ? P.btn_hi : P.bg);
       irrg_canvas_put_rectangle(cv, &fill, rx, ry, rw, rh);
       irrg_civ_frame(cv, rx, ry, rw, rh);
       if (sel)
@@ -202,7 +233,7 @@ void irrg_newgame_draw(struct canvas *cv, int win_w, int win_h)
                            FONT_REQTREE_TEXT, &P.green, v);
     } else if (i == ROW_START) {
       /* Green "Start Game" button (the primary action). */
-      struct color fill = sel ? P.green : P.green_lo;
+      struct color fill = pressed ? P.green_lo : (sel ? P.green : P.green_lo);
       irrg_canvas_put_rectangle(cv, &fill, rx, ry, rw, rh);
       irrg_civ_frame(cv, rx, ry, rw, rh);
       int tw = 0, th = 0;
@@ -210,7 +241,7 @@ void irrg_newgame_draw(struct canvas *cv, int win_w, int win_h)
       irrg_canvas_put_text(cv, rx + rw / 2 - tw / 2, ry + rh / 2 - th / 2,
                            FONT_REQTREE_TEXT, &P.hdr_tx, "Start Game");
     } else {
-      irrg_civ_button(cv, rx, ry, rw, rh, field[i], sel, false);
+      irrg_civ_button(cv, rx, ry, rw, rh, field[i], sel, false, pressed);
     }
   }
 

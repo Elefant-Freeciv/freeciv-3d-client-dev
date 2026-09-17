@@ -26,6 +26,9 @@ bool irrg_menu_is_active(void);
 /* Input hooks (called by the Irrlicht event receiver). */
 void irrg_menu_on_key(int ekey);
 void irrg_menu_on_click(int x, int y);
+void irrg_menu_on_mouse_move(int x, int y);   /* hover highlight */
+void irrg_menu_on_mouse_down(int x, int y);   /* pressed (sunken) look */
+void irrg_menu_on_mouse_up(int x, int y);     /* release */
 
 /* Poll-and-clear a pending action. take_connect = join as a player;
  * take_observer = join as an observer (full map; the server must grant it,

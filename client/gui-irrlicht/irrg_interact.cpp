@@ -131,6 +131,12 @@ static void irrg_handle_map_click(int sx, int sy, bool left)
     if (getenv("FC_IRR_UBDBG")) { fprintf(stderr, "[irrg] Research clicked\n"); fflush(stderr); }
     return;
   }
+  /* The header's green research progress bar is a clickable shortcut too. */
+  if (left && irrg_researchbar_hit(sx, sy)) {
+    irrg_research_open();
+    if (getenv("FC_IRR_UBDBG")) { fprintf(stderr, "[irrg] Research bar clicked\n"); fflush(stderr); }
+    return;
+  }
 
   /* City dialog (if open): a click on the build list starts that build, the
    * close button dismisses it; any click inside the panel is consumed so it
@@ -275,17 +281,30 @@ public:
         else                                irrg_gamemenu_on_key(event.KeyInput.Key);
         return true;
       }
-      if (event.EventType == irr::EET_MOUSE_INPUT_EVENT
-          && event.MouseInput.Event == irr::EMIE_LMOUSE_LEFT_UP) {
-        if (irrg_newgame_is_active())
-          irrg_newgame_on_click(event.MouseInput.X, event.MouseInput.Y);
-        else if (irrg_settings_is_active())
-          irrg_settings_on_click(event.MouseInput.X, event.MouseInput.Y);
-        else
-          irrg_gamemenu_on_click(event.MouseInput.X, event.MouseInput.Y);
-        return true;
+      if (event.EventType == irr::EET_MOUSE_INPUT_EVENT) {
+        if (irrg_newgame_is_active()) {
+          /* The Start Game menu tracks hover (mouse over a row) + pressed
+           * (mouse held on a row) for a visual button indicator. */
+          if (event.MouseInput.Event == irr::EMIE_MOUSE_MOVED)
+            irrg_newgame_on_mouse_move(event.MouseInput.X, event.MouseInput.Y);
+          else if (event.MouseInput.Event == irr::EMIE_LMOUSE_PRESSED_DOWN)
+            irrg_newgame_on_mouse_down(event.MouseInput.X, event.MouseInput.Y);
+          else if (event.MouseInput.Event == irr::EMIE_LMOUSE_LEFT_UP) {
+            irrg_newgame_on_mouse_up(event.MouseInput.X, event.MouseInput.Y);
+            irrg_newgame_on_click(event.MouseInput.X, event.MouseInput.Y);
+          }
+          return true;
+        }
+        if (event.MouseInput.Event == irr::EMIE_LMOUSE_LEFT_UP) {
+          if (irrg_settings_is_active())
+            irrg_settings_on_click(event.MouseInput.X, event.MouseInput.Y);
+          else
+            irrg_gamemenu_on_click(event.MouseInput.X, event.MouseInput.Y);
+          return true;
+        }
+        return true;   /* swallow everything else while a modal screen is up */
       }
-      return true;   /* swallow everything else while a modal screen is up */
+      return true;
     }
 
     /* PREPARING (connected, but no game running yet): no map exists. Own the
@@ -341,9 +360,15 @@ public:
         irrg_menu_on_key(event.KeyInput.Key);
         return true;
       }
-      if (event.EventType == irr::EET_MOUSE_INPUT_EVENT
-          && event.MouseInput.Event == irr::EMIE_LMOUSE_LEFT_UP) {
-        irrg_menu_on_click(event.MouseInput.X, event.MouseInput.Y);
+      if (event.EventType == irr::EET_MOUSE_INPUT_EVENT) {
+        if (event.MouseInput.Event == irr::EMIE_MOUSE_MOVED)
+          irrg_menu_on_mouse_move(event.MouseInput.X, event.MouseInput.Y);
+        else if (event.MouseInput.Event == irr::EMIE_LMOUSE_PRESSED_DOWN)
+          irrg_menu_on_mouse_down(event.MouseInput.X, event.MouseInput.Y);
+        else if (event.MouseInput.Event == irr::EMIE_LMOUSE_LEFT_UP) {
+          irrg_menu_on_mouse_up(event.MouseInput.X, event.MouseInput.Y);
+          irrg_menu_on_click(event.MouseInput.X, event.MouseInput.Y);
+        }
         return true;
       }
       return true;   /* swallow everything else while the menu is showing */
@@ -419,6 +444,7 @@ public:
       irrg_endturn_mouse_move(m.X, m.Y);   /* hover highlight for End Turn */
       irrg_menu_button_mouse_move(m.X, m.Y); /* hover highlight for the Menu button */
       irrg_research_button_mouse_move(m.X, m.Y); /* hover highlight for Research */
+      irrg_researchbar_mouse_move(m.X, m.Y);     /* hover highlight for the header bar */
       if (g_panning) {
         irrg_pan_step(m.X, m.Y);           /* middle- or left-drag panning */
       } else if (g_left_down && irrg_map3d_is_built()) {

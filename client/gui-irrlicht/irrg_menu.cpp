@@ -25,6 +25,38 @@ static int  g_W = 900, g_H = 600;
 static bool g_connect   = false;
 static bool g_observer  = false;
 static bool g_quit      = false;
+static int  g_mx = -1, g_my = -1;   /* mouse position (hover highlight) */
+static int  g_pressed = -1;          /* option the mouse is held on (-1 = none) */
+
+static void opt_rect(int i, int *x, int *y, int *w, int *h);
+
+static bool opt_hover(int i)
+{
+  int rx, ry, rw, rh;
+  opt_rect(i, &rx, &ry, &rw, &rh);
+  return (g_mx >= rx && g_mx < rx + rw && g_my >= ry && g_my < ry + rh);
+}
+
+void irrg_menu_on_mouse_move(int x, int y)
+{
+  if (!g_active) return;
+  g_mx = x; g_my = y;
+}
+
+void irrg_menu_on_mouse_down(int x, int y)
+{
+  if (!g_active) return;
+  g_mx = x; g_my = y;
+  g_pressed = -1;
+  for (int i = 0; i < OPT_COUNT; i++)
+    if (opt_hover(i)) { g_pressed = i; g_sel = i; break; }
+}
+
+void irrg_menu_on_mouse_up(int x, int y)
+{
+  g_mx = x; g_my = y;
+  g_pressed = -1;
+}
 
 static void opt_rect(int i, int *x, int *y, int *w, int *h)
 {
@@ -137,7 +169,9 @@ void irrg_menu_draw(struct canvas *cv, int win_w, int win_h)
       std::snprintf(label, sizeof(label), "Observe %s:%d  (full map)", host, port);
     else
       std::snprintf(label, sizeof(label), "Quit");
-    irrg_civ_button(cv, rx, ry, rw, rh, label, g_sel == i, false);
+    bool hovered = (g_sel == i) || opt_hover(i);   /* keyboard OR mouse hover */
+    bool pressed = (g_pressed == i);               /* mouse held on this button */
+    irrg_civ_button(cv, rx, ry, rw, rh, label, hovered, false, pressed);
   }
 
   /* Hint bar. */

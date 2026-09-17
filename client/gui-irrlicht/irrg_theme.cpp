@@ -75,18 +75,24 @@ int irrg_civ_panel(struct canvas *cv, int x, int y, int w, int h, const char *ti
 }
 
 void irrg_civ_button(struct canvas *cv, int x, int y, int w, int h,
-                     const char *label, bool hovered, bool disabled)
+                     const char *label, bool hovered, bool disabled,
+                     bool pressed)
 {
   if (!cv || w <= 4 || h <= 4 || !label) return;
   struct irrg_civ_pal P = irrg_civ();
-  struct color *fill = disabled ? &P.bg_dark : (hovered ? &P.btn_hi : &P.btn);
+  struct color *fill;
+  if (disabled)      fill = &P.bg_dark;   /* greyed out */
+  else if (pressed)  fill = &P.bg_dark;   /* sunken (mouse held) -- darkest */
+  else if (hovered)  fill = &P.btn_hi;    /* lighter on hover */
+  else               fill = &P.btn;
   irrg_canvas_put_rectangle(cv, fill, x, y, w, h);
   civ_border(cv, x, y, w, h);
   int tw = 0, th = 0;
   irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, label);
   struct color *tc = disabled ? &P.text_dim : &P.text;
-  irrg_canvas_put_text(cv, x + (w - tw) / 2, y + (h - th) / 2,
-                       FONT_REQTREE_TEXT, tc, label);
+  /* a pressed button nudges its label down 1px for a tactile "sunken" feel. */
+  int ty = y + (h - th) / 2 + (pressed ? 1 : 0);
+  irrg_canvas_put_text(cv, x + (w - tw) / 2, ty, FONT_REQTREE_TEXT, tc, label);
 }
 
 void irrg_civ_bar(struct canvas *cv, int x, int y, int w, int h,

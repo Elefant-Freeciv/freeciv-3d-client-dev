@@ -73,6 +73,12 @@ void irrg_draw_research_button(struct canvas *cv);
 bool irrg_research_button_hit(int mx, int my);
 void irrg_research_button_mouse_move(int mx, int my);
 
+/* The header's green research progress bar is ALSO a clickable shortcut to the
+ * tech research selector (irrg_research): a left click on it opens the panel.
+ * Its rect is stored during the header draw; hit-test + hover it. */
+bool irrg_researchbar_hit(int mx, int my);
+void irrg_researchbar_mouse_move(int mx, int my);
+
 /* City dialog mouse input: click a build-list row to start building it, or the
  * close button to dismiss. Returns TRUE if the click landed inside the dialog
  * (so the caller must not also hit-test the map behind it). */

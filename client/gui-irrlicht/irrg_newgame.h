@@ -25,6 +25,9 @@ bool irrg_newgame_is_active(void);
 
 void irrg_newgame_on_key(int ekey);
 void irrg_newgame_on_click(int x, int y);
+void irrg_newgame_on_mouse_move(int x, int y);   /* hover highlight */
+void irrg_newgame_on_mouse_down(int x, int y);   /* pressed (sunken) look */
+void irrg_newgame_on_mouse_up(int x, int y);     /* release */
 
 bool irrg_newgame_take_start(void);
 bool irrg_newgame_take_cancel(void);

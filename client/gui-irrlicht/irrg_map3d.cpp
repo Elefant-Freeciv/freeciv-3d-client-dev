@@ -176,26 +176,43 @@ static bool terrain_has_oriented(const struct terrain *t)
  * east/west slices would land on the wrong side of the tile. We swap the east
  * and west flags before applying the table, so the biome edge faces the actual
  * (mirrored) water side. North/south are unaffected by the mirror. */
+/* Does this terrain render as the "coastline" (shallow shoreline) water -- the
+ * near-land sea that uses the coast .obj art (classic "Ocean")? Open deep water
+ * and lakes use other art, so they do NOT match. Used so a LAND tile treats an
+ * adjacent coastline as a distinct (different) tile and shows its water edge. */
+static bool terrain_is_coast(const struct terrain *t)
+{
+  if (!t || terrain_type_terrain_class(t) != TC_OCEAN) return false;
+  return terrain_obj(t).find("coast") != std::string::npos;
+}
+
 static int terrain_orient_index(struct tile *ptile)
 {
   bool dn = false, de = false, ds = false, dw = false;
   const struct terrain *self = tile_terrain(ptile);
+  const bool self_land = (self && terrain_type_terrain_class(self) != TC_OCEAN);
   struct tile *nb;
   enum direction8 d;
   cardinal_adjc_dir_iterate(&wld.map, ptile, nb, d) {
     const struct terrain *nt = tile_terrain(nb);
-    /* An adjacent OPEN-OCEAN tile is NOT a "different terrain" edge: the sea
-     * reads as one continuous water body, so counting ocean as an edge put
-     * spurious land-edges out in the middle of the sea (ocean meeting deep
-     * ocean) and turned the coastline's shoreline edge the wrong way. Land
-     * biome differences (e.g. desert|plains) still count as edges. */
-    if (nt && terrain_type_terrain_class(nt) != TC_OCEAN && nt != self) {
-      switch (d) {
-      case DIR8_NORTH: dn = true; break;
-      case DIR8_EAST:  de = true; break;
-      case DIR8_SOUTH: ds = true; break;
-      case DIR8_WEST:  dw = true; break;
-      default: break;
+    if (nt && nt != self) {
+      const bool nt_ocean = (terrain_type_terrain_class(nt) == TC_OCEAN);
+      /* An adjacent OPEN-OCEAN / deep-water tile is NOT a "different terrain"
+       * edge: the sea reads as one continuous water body, so counting it put
+       * spurious land-edges out in the middle of the sea (ocean meeting deep
+       * ocean). Land biome differences (e.g. desert|plains) still count as
+       * edges. BUT a COASTLINE neighbour (shallow "coast" art) reads as a
+       * distinct shore, so a LAND tile shows its water edge against it. */
+      const bool is_edge = !nt_ocean
+        || (nt_ocean && self_land && terrain_is_coast(nt));
+      if (is_edge) {
+        switch (d) {
+        case DIR8_NORTH: dn = true; break;
+        case DIR8_EAST:  de = true; break;
+        case DIR8_SOUTH: ds = true; break;
+        case DIR8_WEST:  dw = true; break;
+        default: break;
+        }
       }
     }
   } cardinal_adjc_dir_iterate_end;
