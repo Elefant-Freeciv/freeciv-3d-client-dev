@@ -34,6 +34,10 @@ void irrg_map3d_draw_units(void);
  * frame in the 3D path, after irrg_map3d_draw_units() and before
  * irrg_map3d_draw3d(), so smgr->drawAll() renders them. */
 void irrg_map3d_draw_cities_and_resources(void);
+/* Sync tile-improvement billboards (road, mine, irrigation, crops, ...) and let
+ * smgr->drawAll() render them. Called each frame in the 3D path, before
+ * irrg_map3d_draw3d(). */
+void irrg_map3d_draw_improvements(void);
 /* Rebuild the terrain mesh to include tiles revealed since the last build
  * (units exploring new land), without moving the camera or the billboards.
  * Call each frame in the 3D path (it is a cheap no-op until new tiles appear).

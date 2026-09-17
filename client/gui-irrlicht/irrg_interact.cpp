@@ -28,6 +28,7 @@
 #include "irrg_settings.h"     /* in-game graphics settings menu */
 #include "irrg_newgame.h"      /* new-game options screen */
 #include "irrg_gamemenu.h"     /* in-game menu (ESC with no dialog open) */
+#include "irrg_research.h"     /* tech research selection panel */
 #include "gui_main.h"          /* irrg_open_settings / irrg_open_newgame */
 #include "world_object.h"      /* extern struct world wld (wld.map) */
 #include "map.h"               /* map_pos_to_tile, index_to_map_pos_x/y */
@@ -125,11 +126,22 @@ static void irrg_handle_map_click(int sx, int sy, bool left)
     if (getenv("FC_IRR_UBDBG")) { fprintf(stderr, "[irrg] End Turn clicked\n"); fflush(stderr); }
     return;
   }
+  if (left && irrg_research_button_hit(sx, sy)) {
+    irrg_research_open();
+    if (getenv("FC_IRR_UBDBG")) { fprintf(stderr, "[irrg] Research clicked\n"); fflush(stderr); }
+    return;
+  }
 
   /* City dialog (if open): a click on the build list starts that build, the
    * close button dismisses it; any click inside the panel is consumed so it
    * does not also select/move a unit on the map behind the dialog. */
   if (irrg_city_dialog_click(sx, sy, left))
+    return;
+
+  /* Research selection panel (overlay): a click picks a row (sets the research
+   * project) or closes it; any click inside the panel is consumed so it does
+   * not also select/move a unit on the map behind the panel. */
+  if (irrg_research_handle_click(sx, sy))
     return;
 
   /* Report/Help/Log panels: a left click closes the topmost one (the mouse
@@ -339,6 +351,10 @@ public:
 
     if (event.EventType == irr::EET_KEY_INPUT_EVENT) {
       const bool press = event.KeyInput.PressedDown;
+      /* Research selection panel: while open it owns the keyboard (up/down to
+       * move, Enter to pick, Esc to close) and swallows the rest. */
+      if (irrg_research_handle_key(event.KeyInput.Key, press))
+        return true;
       /* City production menu: while the city dialog is open, Up/Down/PgUp/
        * PgDn/Enter/Space drive it and are consumed (so they don't also pan the
        * map or fire the R/O/S/H shortcuts). */
@@ -363,6 +379,11 @@ public:
       case irr::KEY_KEY_R: if (press) irrg_reports_open(0); break; /* units */
       case irr::KEY_KEY_O: if (press) irrg_reports_open(2); break; /* economy */
       case irr::KEY_KEY_S: if (press) irrg_reports_open(1); break; /* science */
+      case irr::KEY_KEY_T:
+        /* Open the tech research selection menu (pick the next tech to research). */
+        if (press && client_state() == C_S_RUNNING)
+          irrg_research_open();
+        break;
       case irr::KEY_KEY_H: if (press) irrg_help_open();           break;
       case irr::KEY_KEY_F:
         /* Toggle the fog of war (FreeCiv's standard option). OFF reveals the
@@ -397,6 +418,7 @@ public:
       irrg_unitbar_mouse_move(m.X, m.Y);   /* hover highlight for the bar */
       irrg_endturn_mouse_move(m.X, m.Y);   /* hover highlight for End Turn */
       irrg_menu_button_mouse_move(m.X, m.Y); /* hover highlight for the Menu button */
+      irrg_research_button_mouse_move(m.X, m.Y); /* hover highlight for Research */
       if (g_panning) {
         irrg_pan_step(m.X, m.Y);           /* middle- or left-drag panning */
       } else if (g_left_down && irrg_map3d_is_built()) {

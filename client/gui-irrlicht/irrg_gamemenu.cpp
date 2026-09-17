@@ -12,6 +12,8 @@
 #include "graphics.h"      /* struct color {r,g,b}, struct canvas (concrete defs) */
 #include "canvas_g.h"      /* client_font */
 #include "irrg_dialogs.h"  /* irrg_reports_open(), irrg_help_open() */
+#include "irrg_research.h" /* irrg_research_open() (Research row) */
+#include "irrg_unitbar.h"  /* irrg_auto_set_explore/worker, getters (Auto rows) */
 #include "client_main.h"   /* client (global struct civclient), client_state() */
 #include "control.h"       /* request_toggle_fog_of_war(), user_ended_turn() */
 #include "connection.h"    /* connection_close() */
@@ -26,14 +28,17 @@ enum {
 };
 
 enum {
-  ROW_UNITS = 0, ROW_ECON, ROW_SCI, ROW_HELP, ROW_MSG, ROW_GRAPHICS, ROW_FOG,
-  ROW_ENDTURN, ROW_QUIT, ROW_CLOSE, ROW_COUNT
+  ROW_UNITS = 0, ROW_ECON, ROW_SCI, ROW_RESEARCH, ROW_HELP, ROW_MSG, ROW_GRAPHICS,
+  ROW_FOG, ROW_AUTOEXPLORE, ROW_AUTOWORKER, ROW_ENDTURN, ROW_QUIT, ROW_CLOSE,
+  ROW_COUNT
 };
 
 static bool  g_active = false;
 static int   g_W = 900, g_H = 600;
 static int   g_sel    = ROW_UNITS;
 static bool  g_fog    = true;
+static bool  g_auto_e = false;
+static bool  g_auto_w = false;
 static bool  g_close  = false;
 
 static struct color c_bg      = { 18, 20, 28 };
@@ -64,10 +69,15 @@ static void activate_row(void)
   case ROW_UNITS:    irrg_reports_open(0);  break; /* units  */
   case ROW_ECON:     irrg_reports_open(2);  break; /* economy */
   case ROW_SCI:      irrg_reports_open(1);  break; /* science */
+  case ROW_RESEARCH: irrg_research_open();  break; /* pick the research project */
   case ROW_HELP:     irrg_help_open();      break;
   case ROW_MSG:      irrg_log_open();       break; /* the game log panel */
   case ROW_GRAPHICS: irrg_open_settings();  break; /* transitions to the settings menu */
   case ROW_FOG:      request_toggle_fog_of_war(); break;
+  case ROW_AUTOEXPLORE:
+    g_auto_e = !g_auto_e; irrg_auto_set_explore(g_auto_e); break;
+  case ROW_AUTOWORKER:
+    g_auto_w = !g_auto_w; irrg_auto_set_worker(g_auto_w); break;
   case ROW_ENDTURN:  user_ended_turn();     break;
   case ROW_QUIT:
     connection_close(&client.conn, "quit to main menu (in-game menu)");
@@ -85,7 +95,11 @@ void irrg_gamemenu_update(bool active, int win_w, int win_h)
   if (win_w > 0) g_W = win_w;
   if (win_h > 0) g_H = win_h;
   if (active && !was)           /* sync live state when the menu opens */
-    g_fog = irrg_fog_enabled();
+  {
+    g_fog    = irrg_fog_enabled();
+    g_auto_e = irrg_auto_explore();
+    g_auto_w = irrg_auto_worker();
+  }
   if (!active) { g_close = false; g_sel = ROW_UNITS; }
 }
 
@@ -136,11 +150,13 @@ void irrg_gamemenu_draw(struct canvas *cv, int win_w, int win_h)
 
   /* label + shortcut key per row. */
   const char *label[ROW_COUNT] = {
-    "Unit Reports", "Economy Report", "Science Report", "Help", "Messages (log)",
-    "Graphics Settings", "Fog of War", "End Turn", "Quit to Main Menu", "Close"
+    "Unit Reports", "Economy Report", "Science Report", "Research (next tech)",
+    "Help", "Messages (log)", "Graphics Settings", "Fog of War",
+    "Auto Explore (scouts)", "Auto Worker (workers)", "End Turn",
+    "Quit to Main Menu", "Close"
   };
   const char *key[ROW_COUNT] = {
-    "R", "O", "S", "H", "L", "G", "F", "", "Q", "ESC"
+    "R", "O", "S", "T", "H", "L", "G", "F", "", "", "", "Q", "ESC"
   };
 
   for (int i = 0; i < ROW_COUNT; i++) {
@@ -168,13 +184,15 @@ void irrg_gamemenu_draw(struct canvas *cv, int win_w, int win_h)
                            FONT_REQTREE_TEXT, &c_key, key[i]);
     }
 
-    /* fog on/off value (to the left of the shortcut key) */
-    if (i == ROW_FOG) {
+    /* On/Off value (to the left of the shortcut key) for the toggle rows. */
+    if (i == ROW_FOG || i == ROW_AUTOEXPLORE || i == ROW_AUTOWORKER) {
+      bool on = (i == ROW_FOG)          ? g_fog
+                 : (i == ROW_AUTOEXPLORE) ? g_auto_e : g_auto_w;
       char v[16];
-      std::snprintf(v, sizeof(v), g_fog ? "On" : "Off");
+      std::snprintf(v, sizeof(v), on ? "On" : "Off");
       int vw = 0, vh = 0, kw = 0, kh = 0;
       irrg_get_text_size(&vw, &vh, FONT_REQTREE_TEXT, v);
-      irrg_get_text_size(&kw, &kh, FONT_REQTREE_TEXT, "F");
+      irrg_get_text_size(&kw, &kh, FONT_REQTREE_TEXT, key[i]);
       irrg_canvas_put_text(cv, rx + rw - 16 - kw - 8 - vw,
                            ry + (rh - vh) / 2, FONT_REQTREE_TEXT, &c_val, v);
     }

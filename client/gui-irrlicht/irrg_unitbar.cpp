@@ -24,12 +24,17 @@ extern "C" {
 #include "irrg_cxxside.h"  /* irrg_get_text_size (C++ linkage) */
 #include "irrg_theme.h"    /* Civ4 palette + beveled frame/button helpers */
 #include "client_main.h"   /* client_state, C_S_RUNNING */
+#include "player.h"        /* client_player(), struct player { units } */
 #include "unitlist.h"
 #include "unit.h"          /* ORDER_LAST, unit fields, unit_can_do_action, unit_tile */
 #include "unittype.h"      /* unit_type_get, utype_name_translation */
 #include "control.h"       /* head_of_units_in_focus, request_unit_*, request_do_action */
 #include "actions.h"       /* ACTION_* IDs */
-#include "map.h"           /* tile_index */
+#include "map.h"           /* tile_index, tile_explored, map_iterate */
+#include "tile.h"          /* tile_terrain */
+#include "terrain.h"       /* terrain_class, TC_OCEAN */
+#include "extras.h"        /* extra_type_by_rule_name, extra_index */
+#include "packets_gen.h"   /* dsend_packet_edit_tile_extra (test fallback) */
 #include "irrg_dialogs.h"  /* irrg_city_dialog_is_open */
 
 /* How each button dispatches its action. */
@@ -252,4 +257,77 @@ bool irrg_unitbar_handle_click(int mx, int my)
   if (hit < 0) return false;
   unitbar_do_action(g_disp[hit]);
   return true;
+}
+
+/* ======================================================================== */
+/* Auto Explore / Auto Worker (FreeCiv server-side agents).                 */
+/* The server does the actual work; we only set each unit's SSA mode.       */
+/* ======================================================================== */
+static bool g_auto_explore = false;
+static bool g_auto_worker  = false;
+
+bool irrg_auto_explore(void) { return g_auto_explore; }
+bool irrg_auto_worker(void)  { return g_auto_worker; }
+
+void irrg_auto_set_explore(bool on) { g_auto_explore = on; irrg_auto_tick(); }
+void irrg_auto_set_worker(bool on)  { g_auto_worker  = on; irrg_auto_tick(); }
+
+/* Set each of the player's units to the SSA implied by the two toggles:
+ *   worker unit -> (auto_worker ? SSA_AUTOWORKER  : SSA_NONE)
+ *   other unit  -> (auto_explore? SSA_AUTOEXPLORE : SSA_NONE)
+ * Only a unit whose SSA actually changes gets a packet, so calling this every
+ * tick is cheap + it picks up newly-built units. */
+void irrg_auto_tick(void)
+{
+  if (client_state() != C_S_RUNNING) return;
+  struct player *me = client_player();
+  if (!me || !me->units) return;
+  struct unit *punit;
+  unit_list_iterate(me->units, punit) {
+    enum server_side_agent want;
+    if (can_unit_do_autoworker(punit))
+      want = g_auto_worker ? SSA_AUTOWORKER : SSA_NONE;
+    else
+      want = g_auto_explore ? SSA_AUTOEXPLORE : SSA_NONE;
+    if (punit->ssa_controller != want)
+      request_unit_ssa_set(punit, want);
+  } unit_list_iterate_end;
+}
+
+/* Test helper (FC_IRR_TESTIMPROVE): have the first unit that can improve its
+ * current tile do so, to verify the 3D improvement marker renders. */
+bool irrg_test_improve(void)
+{
+  if (client_state() != C_S_RUNNING) return false;
+  struct player *me = client_player();
+  if (!me || !me->units) return false;
+  struct unit *punit;
+  unit_list_iterate(me->units, punit) {
+    struct tile *pt = unit_tile(punit);
+    if (!pt) continue;
+    action_id a = -1;
+    if (unit_can_do_action(punit, ACTION_MINE)) a = ACTION_MINE;
+    else if (unit_can_do_action(punit, ACTION_IRRIGATE)) a = ACTION_IRRIGATE;
+    else if (unit_can_do_action(punit, ACTION_CLEAN)) a = ACTION_CLEAN;
+    else if (unit_can_do_action(punit, ACTION_ROAD)) a = ACTION_ROAD;
+    if (a != -1) {
+      request_do_action(a, punit->id, tile_index(pt), 0, NULL);
+      return true;
+    }
+  } unit_list_iterate_end;
+  /* Fallback (test only; the client runs with "hack" editor rights): place a
+   * road directly on one of our units' land tiles (near the camera) so the 3D
+   * improvement marker is verifiable without needing a worker unit. */
+  struct extra_type *proad = extra_type_by_rule_name("road");
+  if (proad) {
+    unit_list_iterate(me->units, punit) {
+      struct tile *pt = unit_tile(punit);
+      if (pt && terrain_type_terrain_class(tile_terrain(pt)) != TC_OCEAN) {
+        dsend_packet_edit_tile_extra(&client.conn, tile_index(pt),
+                                     extra_index(proad), false, 0, 1);
+        return true;
+      }
+    } unit_list_iterate_end;
+  }
+  return false;
 }

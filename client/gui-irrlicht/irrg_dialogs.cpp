@@ -5,6 +5,7 @@
 #include "gui_main.h"
 #include "irrg_dialogs.h"
 #include "irrg_unitbar.h"  /* irrg_unitbar_draw (unit action buttons) */
+#include "irrg_research.h" /* irrg_research_is_open (hide the Research button) */
 
 #include "irrg_cxxside.h"  /* irrg_canvas_create / irrg_canvas_free */
 #include "city.h"          /* struct city, city_name_get, city_population, ... */
@@ -673,6 +674,46 @@ void irrg_menu_button_mouse_move(int mx, int my)
   g_mb_my = my;
 }
 
+/* ---- Top-bar "Research" button (top-right, LEFT of the Menu button): opens
+ * the tech research selection menu (irrg_research). ---- */
+static int g_rb_x = 0, g_rb_y = 0, g_rb_w = 0, g_rb_h = 28;
+static int g_rb_mx = -1, g_rb_my = -1;
+
+void irrg_draw_research_button(struct canvas *cv)
+{
+  g_rb_w = 0;
+  if (!cv) return;
+  if (client_state() != C_S_RUNNING) return;
+  if (irrg_city_dialog_is_open()) return;      /* hidden while a modal is up */
+  if (irrg_research_is_open()) return;          /* hidden while its own panel is up */
+  const char *label = "Research";
+  int tw = 0, th = 0;
+  irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, label);
+  g_rb_w = tw + 22;
+  g_rb_h = 30;
+  g_rb_y = g_et_y;
+  g_rb_x = g_mb_x - 8 - g_rb_w;                 /* to the LEFT of the Menu button */
+  bool hovered = (g_rb_mx >= g_rb_x && g_rb_mx < g_rb_x + g_rb_w
+                  && g_rb_my >= g_rb_y && g_rb_my < g_rb_y + g_rb_h);
+  irrg_civ_button(cv, g_rb_x, g_rb_y, g_rb_w, g_rb_h, label, hovered, false);
+}
+
+bool irrg_research_button_hit(int mx, int my)
+{
+  if (client_state() != C_S_RUNNING) return false;
+  if (irrg_city_dialog_is_open()) return false;
+  if (irrg_research_is_open()) return false;
+  if (g_rb_w <= 0) return false;
+  return (mx >= g_rb_x && mx < g_rb_x + g_rb_w
+          && my >= g_rb_y && my < g_rb_y + g_rb_h);
+}
+
+void irrg_research_button_mouse_move(int mx, int my)
+{
+  g_rb_mx = mx;
+  g_rb_my = my;
+}
+
 /* ---- Minimap (3D): a small colour map of the whole explored map + a viewport
  * rectangle showing where the 3D camera is looking. Click it to jump there. ---- */
 static int g_mm_x = 0, g_mm_y = 0, g_mm_s = 0;   /* box (set during draw) */
@@ -844,12 +885,16 @@ void irrg_draw_dialogs(struct canvas *cv)
    * button is the mouse entry point to every in-game action (no ESC needed). */
   irrg_draw_endturn_button(cv);
   irrg_draw_menu_button(cv);
+  irrg_draw_research_button(cv);   /* to the LEFT of the Menu button */
 
   /* Selected-unit info panel (bottom-left corner) + the unit action buttons
    * (bottom centre) for the focused unit. Both work in the 3D and 2D views and
    * are no-ops unless a unit is focused. */
   irrg_draw_unit_dialog(cv);
   irrg_unitbar_draw(cv);
+
+  /* Tech research selection panel (overlay, drawn last so it sits on top). */
+  irrg_research_draw(cv);
 
   /* (minimap is drawn up-front, after the city dialog, so it sits under the
    * top-right buttons but stays visible over the map) */

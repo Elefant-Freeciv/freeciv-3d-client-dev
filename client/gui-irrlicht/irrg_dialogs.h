@@ -67,6 +67,12 @@ void irrg_draw_menu_button(struct canvas *cv);
 bool irrg_menu_button_hit(int mx, int my);
 void irrg_menu_button_mouse_move(int mx, int my);
 
+/* Top-bar "Research" button (top-right, to the LEFT of the Menu button): opens
+ * the tech research selection menu (see irrg_research.h). */
+void irrg_draw_research_button(struct canvas *cv);
+bool irrg_research_button_hit(int mx, int my);
+void irrg_research_button_mouse_move(int mx, int my);
+
 /* City dialog mouse input: click a build-list row to start building it, or the
  * close button to dismiss. Returns TRUE if the click landed inside the dialog
  * (so the caller must not also hit-test the map behind it). */

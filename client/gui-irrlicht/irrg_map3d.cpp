@@ -368,6 +368,11 @@ std::map<int, UBB>   city_bb;    /* city id -> billboard node */
 std::map<int, UTex>  city_tex;   /* city style -> sprite texture */
 std::map<int, UBB>   res_bb;     /* tile index -> resource billboard node */
 std::map<int, UTex>  res_tex;    /* resource extra_index -> sprite texture */
+/* Tile improvements (road, mine, irrigation, crops, ...): keyed by
+ * (tile_index * 100 + extra_index) so a tile with several improvements gets
+ * one billboard each. Textures cache per extra type. */
+std::map<int, UBB>   imp_bb;     /* tile_index*100+extra_index -> billboard */
+std::map<int, UTex>  imp_tex;    /* improvement extra_index -> sprite texture */
 
 /* Get (or lazily create + cache) an Irrlicht texture for a unit type's icon
  * sprite. FreeCiv sprites are CPU SColor* (A8R8G8B8), top-down, so we copy the
@@ -456,6 +461,52 @@ static video::ITexture *resource_texture(const struct extra_type *pextra,
   UTex u; u.tex = tex; u.w = *pw; u.h = *ph;
   res_tex[id] = u;
   return tex;
+}
+
+/* A small coloured "diamond" marker texture (used to show a tile improvement in
+ * the 3D view). The tileset's improvement art is internal to tilespec.c (a
+ * per-style sprite union with no clean public getter), so a coloured marker is a
+ * robust stand-in: one distinct colour per improvement (cycled by extra index).
+ * Generated once per palette colour. */
+static video::ITexture *make_marker_texture(struct color c)
+{
+  const int S = 32;
+  core::dimension2d<u32> dim((u32)S, (u32)S);
+  video::IImage *img = vdrv->createImage(video::ECF_A8R8G8B8, dim);
+  if (!img) return 0;
+  video::SColor *p = (video::SColor *)img->lock();
+  for (int y = 0; y < S; ++y)
+    for (int x = 0; x < S; ++x) {
+      float dx = (x + 0.5f - S * 0.5f) / S;
+      float dy = (y + 0.5f - S * 0.5f) / S;
+      float d = std::fabs(dx) + std::fabs(dy);
+      unsigned char a = 0;
+      if (d < 0.30f) a = 235;
+      else if (d < 0.37f) a = 120;      /* soft edge */
+      p[(size_t)y * S + x] = video::SColor(a, (u8)c.r, (u8)c.g, (u8)c.b);
+    }
+  img->unlock();
+  static int mc = 0;
+  std::string tn = "irrg_marker_" + std::to_string(mc++);
+  video::ITexture *tex = vdrv->addTexture(tn.c_str(), img);
+  img->drop();
+  return tex;
+}
+
+static struct color g_imp_palette[6] = {
+  {230, 160,  60}, { 90, 150, 235}, {185, 185, 190},
+  {120, 205,  95}, {225, 200,  90}, {205, 120, 205}
+};
+
+/* The marker texture for a tile improvement (a palette colour by extra index).
+ * Always 32x32. */
+static video::ITexture *improvement_marker_texture(int extra_idx, int *pw, int *ph)
+{
+  static video::ITexture *pal[6] = {0, 0, 0, 0, 0, 0};
+  int ci = ((extra_idx % 6) + 6) % 6;
+  if (!pal[ci]) pal[ci] = make_marker_texture(g_imp_palette[ci]);
+  *pw = *ph = 32;
+  return pal[ci];
 }
 
 /* A soft, glowing cyan ring on a transparent disc (used for the selection
@@ -1047,6 +1098,76 @@ void irrg_map3d_draw_cities_and_resources(void)
   }
 }
 
+/* Sync tile-improvement billboards (road, mine, irrigation, crops, ...) to the
+ * current client state so smgr->drawAll() renders them. Improvements are extras
+ * stored in the tile's `extras` bitvector; we enumerate the set bits and draw
+ * each non-resource extra as a small billboard using the tileset's extras art
+ * (get_tile_resource_sprite renders them). Only explored tiles are shown, and
+ * each tile's extra set is walked byte-by-byte (so empty tiles are cheap).
+ * Called each frame, like the resource sync. */
+void irrg_map3d_draw_improvements(void)
+{
+  if (!built || !smgr || !vdrv) return;
+  if (!unit_parent) unit_parent = smgr->addEmptySceneNode();
+
+  std::set<int> imp_seen;
+  const int nextr = game.control.num_extra_types;
+  for (int y = 0; y < mh; ++y) {
+    for (int x = 0; x < mw; ++x) {
+      struct tile *ptile = map_pos_to_tile(&wld.map, x, y);
+      if (!ptile || client_tile_get_known(ptile) == TILE_UNKNOWN) continue;
+      const bv_extras *ex = tile_extras(ptile);
+      if (!ex) continue;
+      const int res_idx = (ptile->resource) ? extra_index(ptile->resource) : -1;
+      for (size_t byte = 0; byte < sizeof(ex->vec); ++byte) {
+        unsigned char b = ex->vec[byte];
+        if (!b) continue;
+        for (int bit = 0; bit < 8; ++bit) {
+          if (!(b & (1u << bit))) continue;
+          int idx = (int)(byte * 8 + bit);
+          if (idx >= nextr) break;
+          if (idx == res_idx) continue;        /* the resource is drawn separately */
+          struct extra_type *pextra = extra_by_number(idx);
+          if (!pextra) continue;
+          int key = tile_index(ptile) * 100 + idx;
+          imp_seen.insert(key);
+          /* Spread a tile's several improvements across a small 3x3 grid so the
+           * markers don't perfectly overlap. */
+          f32 ox = (((idx % 3) - 1) * 0.18f);
+          f32 oz = ((((idx / 3) % 3) - 1) * 0.18f);
+          core::vector3df pos((f32)fx(x) + ox, 0.5f, (f32)y + oz);
+          std::map<int, UBB>::iterator it = imp_bb.find(key);
+          if (it == imp_bb.end()) {
+            int tw = 0, th = 0;
+            video::ITexture *tex = improvement_marker_texture(idx, &tw, &th);
+            if (!tex || tw <= 0) continue;
+            f32 scale = 0.5f;                   /* small ground marker */
+            f32 bh = (f32)th / (f32)tw * scale;
+            scene::ISceneNode *node = smgr->addBillboardSceneNode(
+                unit_parent, core::dimension2d<f32>(scale, bh), pos, -1,
+                video::SColor(255, 255, 255, 255), video::SColor(255, 255, 255, 255));
+            if (!node) continue;
+            node->setMaterialTexture(0, tex);
+            node->setMaterialFlag(video::EMF_LIGHTING, false);
+            node->setMaterialFlag(video::EMF_ZWRITE_ENABLE, false);
+            node->setMaterialType(video::EMT_TRANSPARENT_ALPHA_CHANNEL);
+            UBB r; r.node = node;
+            imp_bb[key] = r;
+          } else if (it->second.node) {
+            it->second.node->setPosition(pos);
+          }
+        }
+      }
+    }
+  }
+  for (std::map<int, UBB>::iterator it = imp_bb.begin(); it != imp_bb.end(); ) {
+    if (imp_seen.find(it->first) == imp_seen.end()) {
+      if (it->second.node) it->second.node->remove();
+      it = imp_bb.erase(it);
+    } else ++it;
+  }
+}
+
 static video::ITexture *scene_rt = 0;
 
 /* Render the 3D scene to an offscreen render target (window-sized) and return
@@ -1170,7 +1291,7 @@ void irrg_map3d_edge_pan(int win_w, int win_h, int mx, int my)
   const bool up    = my < margin;
   const bool down  = my > win_h - margin;
   if (!left && !right && !up && !down) return;
-  f32 sp = g_cam_height * 0.05f;   /* world units per frame, zoom-scaled */
+  f32 sp = g_cam_height * 0.05f * 0.6f;   /* world units/frame, zoom-scaled; 60% speed */
   f32 dx = 0.0f, dz = 0.0f;
   /* camera-right = world +x; screen-down = world +z (see fx() + camera setup). */
   if (left)  dx -= sp;   /* reveal the east side  -> camera pans right (world +x) */

@@ -1,6 +1,7 @@
 #include "gui_main.h"
 #include "irrg_menu.h"
 #include "irrg_cxxside.h"  /* irrg_canvas_put_text/rectangle, irrg_get_text_size */
+#include "irrg_theme.h"    /* Civ4 palette + beveled frame/button helpers */
 #include "graphics.h"      /* struct color {r,g,b}, struct canvas (concrete defs) */
 #include "canvas_g.h"      /* client_font */
 #include "client_main.h"   /* server_host, server_port, user_name */
@@ -24,16 +25,6 @@ static int  g_W = 900, g_H = 600;
 static bool g_connect   = false;
 static bool g_observer  = false;
 static bool g_quit      = false;
-
-/* Panel + text colors. */
-static struct color c_bg      = { 20, 22, 30  };
-static struct color c_title   = { 120, 200, 255 };
-static struct color c_sub     = { 150, 152, 165 };
-static struct color c_opt     = { 40, 46, 62  };
-static struct color c_optsel  = { 70, 122, 195 };
-static struct color c_observ  = { 46, 92, 130 };   /* observer highlight (teal-ish) */
-static struct color c_opttx   = { 235, 235, 235 };
-static struct color c_hint    = { 130, 132, 145 };
 
 static void opt_rect(int i, int *x, int *y, int *w, int *h)
 {
@@ -108,61 +99,53 @@ void irrg_menu_draw(struct canvas *cv, int win_w, int win_h)
   if (!cv) return;
   g_W = win_w > 0 ? win_w : g_W;
   g_H = win_h > 0 ? win_h : g_H;
+  struct irrg_civ_pal P = irrg_civ();
 
-  /* Full background. */
-  irrg_canvas_put_rectangle(cv, &c_bg, 0, 0, g_W, g_H);
+  /* Full background (Civ4 dark charcoal). */
+  irrg_canvas_put_rectangle(cv, &P.bg, 0, 0, g_W, g_H);
 
-  /* Title. */
+  /* Large gold title + subtitle. */
   {
     int tw = 0, th = 0;
     irrg_get_text_size(&tw, &th, FONT_CITY_NAME, "FreeCiv 3D");
-    irrg_canvas_put_text(cv, g_W / 2 - tw / 2, g_H / 4 - 20,
-                         FONT_CITY_NAME, &c_title, "FreeCiv 3D");
-  }
-  /* Subtitle. */
-  {
-    int tw = 0, th = 0;
-    irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, "Irrlicht client");
+    irrg_canvas_put_text(cv, g_W / 2 - tw / 2, g_H / 4 - 30,
+                         FONT_CITY_NAME, &P.gold_hi, "FreeCiv 3D");
+    irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, "Irrlicht 3D client");
     irrg_canvas_put_text(cv, g_W / 2 - tw / 2, g_H / 4 + 14,
-                         FONT_REQTREE_TEXT, &c_sub, "Irrlicht client");
+                         FONT_REQTREE_TEXT, &P.text_dim, "Irrlicht 3D client");
   }
 
-  /* Options. */
+  /* Central beveled frame around the option buttons. */
+  {
+    const int bw = 460, bh = 46, gap = 60;
+    const int fw = bw + 40, fx = g_W / 2 - fw / 2;
+    const int fy = g_H / 2 - 80 - 22;
+    const int fh = gap * (OPT_COUNT - 1) + bh + 40;
+    irrg_civ_frame(cv, fx, fy, fw, fh);
+  }
+
+  /* Options as beveled Civ4 buttons (selected one is the lighter hover fill). */
   const char *host = server_host[0] ? server_host : "localhost";
   int port = (server_port > 0) ? server_port : 3000;
   for (int i = 0; i < OPT_COUNT; i++) {
     int rx, ry, rw, rh;
     opt_rect(i, &rx, &ry, &rw, &rh);
-    struct color *fill = (g_sel == i) ? ((i == OPT_OBSERVE) ? &c_observ : &c_optsel)
-                                      : &c_opt;
-    irrg_canvas_put_rectangle(cv, fill, rx, ry, rw, rh);
-
     char label[200];
     if (i == OPT_CONNECT)
       std::snprintf(label, sizeof(label), "Connect to %s:%d  (as player)", host, port);
     else if (i == OPT_OBSERVE)
-      std::snprintf(label, sizeof(label), "Connect as observer to %s:%d  (full map)", host, port);
+      std::snprintf(label, sizeof(label), "Observe %s:%d  (full map)", host, port);
     else
       std::snprintf(label, sizeof(label), "Quit");
-
-    int tw = 0, th = 0;
-    irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, label);
-    irrg_canvas_put_text(cv, rx + (g_sel == i ? 28 : 16),
-                         ry + (rh - th) / 2,
-                         FONT_REQTREE_TEXT, &c_opttx, label);
-    if (g_sel == i) {
-      irrg_canvas_put_text(cv, rx + 8, ry + (rh - th) / 2,
-                           FONT_REQTREE_TEXT, &c_opttx, ">");
-    }
+    irrg_civ_button(cv, rx, ry, rw, rh, label, g_sel == i, false);
   }
 
   /* Hint bar. */
   {
     int tw = 0, th = 0;
-    irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT,
-                       "1 connect   2 observer   3/ESC quit   (or click an option)");
+    const char *hint = "1 connect   2 observer   3/ESC quit   (or click an option)";
+    irrg_get_text_size(&tw, &th, FONT_REQTREE_TEXT, hint);
     irrg_canvas_put_text(cv, g_W / 2 - tw / 2, g_H - 46,
-                         FONT_REQTREE_TEXT, &c_hint,
-                       "1 connect   2 observer   3/ESC quit   (or click an option)");
+                         FONT_REQTREE_TEXT, &P.text_dim, hint);
   }
 }

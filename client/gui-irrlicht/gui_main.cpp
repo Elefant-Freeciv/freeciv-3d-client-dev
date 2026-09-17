@@ -35,6 +35,8 @@
 #include "irrg_settings.h"  /* in-game graphics settings menu */
 #include "irrg_newgame.h"   /* new-game options screen */
 #include "irrg_gamemenu.h"  /* in-game menu (GUI path to every action) */
+#include "irrg_unitbar.h"   /* irrg_auto_tick (Auto Explore / Auto Worker) */
+#include "irrg_research.h"  /* irrg_research_open (FC_IRR_TESTRESEARCH) */
 #include "player.h"        /* player_primary_capital (CITYDLG test) */
 #include "city.h"          /* struct city, city_name_get (CITYDLG test) */
 #include "world_object.h"  /* wld.map (loading progress: map dims + tile terrain) */
@@ -684,6 +686,21 @@ int irrg_ui_main(int argc, char *argv[])
      * screenshot (the ESC-with-no-dialog entry point to every in-game action). */
     if (client_state() == C_S_RUNNING && std::getenv("FC_IRR_TESTMENU"))
       irrg_open_gamemenu();
+    /* FC_IRR_TESTRESEARCH=1: hold the tech research selection panel open
+     * (C_S_RUNNING) for a screenshot. */
+    if (client_state() == C_S_RUNNING && std::getenv("FC_IRR_TESTRESEARCH"))
+      irrg_research_open();
+    /* FC_IRR_TESTIMPROVE=1: have the first improvable unit improve its tile
+     * (one-shot, at frame 40) to verify the 3D improvement marker renders. */
+    if (client_state() == C_S_RUNNING && std::getenv("FC_IRR_TESTIMPROVE")) {
+      static bool imp_done = false;
+      if (!imp_done && frames_since_init >= 40) {
+        imp_done = true;
+        bool sent = irrg_test_improve();
+        irrg_log((std::string("TESTIMPROVE: ") +
+                  (sent ? "improvement requested" : "no improvable unit")).c_str());
+      }
+    }
     /* FC_IRR_TEST3D=1: lazily build + show the 3D map at runtime (tests the
      * Settings > 3D Terrain toggle path). */
     if (client_state() == C_S_RUNNING && std::getenv("FC_IRR_TEST3D")) {
@@ -911,6 +928,7 @@ int irrg_ui_main(int argc, char *argv[])
         g_vdriver->beginScene(true, true, video::SColor(255, 70, 130, 180));
         irrg_map3d_draw_units();   /* sync unit billboards + selection ring */
         irrg_map3d_draw_cities_and_resources(); /* city + resource billboards */
+        irrg_map3d_draw_improvements();         /* road/mine/irrigation/crops billboards */
         irrg_map3d_draw3d();       /* drawAll() renders terrain + billboards */
         irrg_present_dialog_overlay((int)ssz.Width, (int)ssz.Height);
         g_vdriver->endScene();
@@ -1092,6 +1110,12 @@ int irrg_ui_main(int argc, char *argv[])
       }
       irrg_log(hb.c_str());
     }
+
+    /* Auto Explore / Auto Worker: apply the current server-side-agent mode to
+     * the player's units once a second (cheap: only changed units send a
+     * packet). This also picks up newly-built units. */
+    if ((frames % 60) == 0)
+      irrg_auto_tick();
   }
   irrg_log("ui_main: event loop exited.");
   return 0;

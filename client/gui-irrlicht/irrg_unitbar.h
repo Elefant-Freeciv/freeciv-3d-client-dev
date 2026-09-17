@@ -27,4 +27,23 @@ void irrg_unitbar_release(void);
 /* In-game + a unit is focused + no modal dialog is up. */
 bool irrg_unitbar_visible(void);
 
+/* --- Auto Explore / Auto Worker (FreeCiv server-side agents) ---------------
+ * Global toggles. When on, irrg_auto_tick() sets each eligible unit's SSA:
+ * worker units -> SSA_AUTOWORKER (the server makes them improve tiles with
+ * their moves), other units -> SSA_AUTOEXPLORE (the server makes them explore
+ * new territory). The server performs the actual work; we only set the mode.
+ * The tick is called each frame (throttled in gui_main) so newly-built units
+ * pick up the current mode; it only sends a packet when a unit's SSA changes.
+ * -------------------------------------------------------------------------- */
+void irrg_auto_set_explore(bool on);
+void irrg_auto_set_worker(bool on);
+bool irrg_auto_explore(void);
+bool irrg_auto_worker(void);
+void irrg_auto_tick(void);
+
+/* Test helper (FC_IRR_TESTIMPROVE): have the first unit that can improve its
+ * current tile do so (mine/irrigate/clear/road) to verify 3D improvement
+ * rendering. Returns true if an action was sent. */
+bool irrg_test_improve(void);
+
 #endif /* IRRG_UNITBAR_H */

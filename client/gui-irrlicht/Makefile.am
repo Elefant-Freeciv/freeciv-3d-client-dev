@@ -48,6 +48,8 @@ libgui_irrlicht_la_SOURCES = \
 	irrg_gamemenu.h \
 	irrg_theme.cpp \
 	irrg_theme.h \
+	irrg_research.cpp \
+	irrg_research.h \
 	irrg_stubs.cpp \
 	irrg_common_stubs.cpp
 
