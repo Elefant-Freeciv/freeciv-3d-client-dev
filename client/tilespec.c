@@ -7382,6 +7382,10 @@ void tileset_use_preferred_theme(const struct tileset *t)
     default_theme_name = gui_options.gui_sdl3_default_theme_name;
     default_theme_name_sz = sizeof(gui_options.gui_sdl3_default_theme_name);
     break;
+  case GUI_VULKAN:
+    default_theme_name = gui_options.gui_vulkan_default_theme_name;
+    default_theme_name_sz = sizeof(gui_options.gui_vulkan_default_theme_name);
+    break;
   case GUI_STUB:
   case GUI_QT:
   case GUI_SDL:

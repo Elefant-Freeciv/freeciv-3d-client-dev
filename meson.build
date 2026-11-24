@@ -906,7 +906,7 @@ if get_option('audio') == 'sdl2' or get_option('clients').contains('sdl2')
   endif
 endif
 
-if get_option('audio') == 'sdl3' or get_option('clients').contains('sdl3')
+if get_option('audio') == 'sdl3' or get_option('clients').contains('sdl3') or get_option('clients').contains('vulkan')
   if host_system == 'windows'
     sdl3main_dep = [c_compiler.find_library('mingw32', dirs: cross_lib_path),
                     dependency('sdl3')]
@@ -4266,6 +4266,166 @@ custom_target('mi_sdl3',
               depend_files: files('fc_version'),
               install: true,
               install_dir: join_paths(get_option('datadir'), 'metainfo'))
+
+endif
+
+if get_option('clients').contains('vulkan')
+
+# ---------------------------------------------------------------------------
+# 3D client: gui-sdl3 widget toolkit + Vulkan voxel map renderer.
+# ---------------------------------------------------------------------------
+
+vulkan_dep = dependency('vulkan')
+sdl3v_ttf_dep = dependency('sdl3-ttf')
+sdl3v_gfx_inc = include_directories('dependencies')
+sdl3v_image_dep = dependency('sdl3-image', required: false)
+sdl3v_cargs = []
+sdl3v_png_dep = []
+
+if sdl3v_image_dep.found()
+  sdl3v_cargs += '-DHAVE_SDL3_IMAGE=1'
+else
+  # img_png.c provides an IMG_Load() replacement on top of libpng.
+  sdl3v_png_dep = dependency('libpng')
+endif
+
+glslc_exe = find_program('glslc', required: false)
+if not glslc_exe.found()
+  error('The vulkan client needs glslc (from the glslang tools) to build its shaders')
+endif
+
+vk_shaders = [['overlay_vert', 'client/gui-vulkan/shaders/overlay.vert'],
+              ['overlay_frag', 'client/gui-vulkan/shaders/overlay.frag'],
+              ['scene_vert', 'client/gui-vulkan/shaders/scene.vert'],
+              ['scene_frag', 'client/gui-vulkan/shaders/scene.frag']]
+vk_shader_headers = []
+
+foreach vk_shader : vk_shaders
+  vk_spv = custom_target('vk_spv_' + vk_shader[0],
+                         input: files(vk_shader[1]),
+                         output: vk_shader[0] + '.spv',
+                         command: [glslc_exe, '--target-env=vulkan1.1',
+                                   '-O', '-o', '@OUTPUT@', '@INPUT@'])
+  vk_shader_headers += custom_target('vk_hdr_' + vk_shader[0],
+                         input: vk_spv,
+                         output: 'vk_shader_' + vk_shader[0] + '.h',
+                         command: [python_exe,
+                                   files('client/gui-vulkan/shaders/embed_spv.py'),
+                                   '@INPUT@', '@OUTPUT@',
+                                   'vk_shader_' + vk_shader[0]])
+endforeach
+
+executable('freeciv-vulkan',
+  'client/gui-vulkan/action_dialog.c',
+  'client/gui-vulkan/canvas.c',
+  'client/gui-vulkan/chatline.c',
+  'client/gui-vulkan/citydlg.c',
+  'client/gui-vulkan/cityrep.c',
+  'client/gui-vulkan/cma_fe.c',
+  'client/gui-vulkan/colors.c',
+  'client/gui-vulkan/connectdlg.c',
+  'client/gui-vulkan/dialogs.c',
+  'client/gui-vulkan/diplodlg.c',
+  'client/gui-vulkan/finddlg.c',
+  'client/gui-vulkan/gotodlg.c',
+  'client/gui-vulkan/graphics.c',
+  'client/gui-vulkan/gui_main.c',
+  'client/gui-vulkan/gui_mouse.c',
+  'client/gui-vulkan/gui_string.c',
+  'client/gui-vulkan/gui_tilespec.c',
+  'client/gui-vulkan/helpdlg.c',
+  'client/gui-vulkan/infradlg.c',
+  'client/gui-vulkan/inteldlg.c',
+  'client/gui-vulkan/luaconsole.c',
+  'client/gui-vulkan/mapctrl.c',
+  'client/gui-vulkan/mapview.c',
+  'client/gui-vulkan/menu.c',
+  'client/gui-vulkan/messagewin.c',
+  'client/gui-vulkan/optiondlg.c',
+  'client/gui-vulkan/pages.c',
+  'client/gui-vulkan/plrdlg.c',
+  'client/gui-vulkan/repodlgs.c',
+  'client/gui-vulkan/spaceshipdlg.c',
+  'client/gui-vulkan/sprite.c',
+  'client/gui-vulkan/themebackgrounds.c',
+  'client/gui-vulkan/themecolors.c',
+  'client/gui-vulkan/themes.c',
+  'client/gui-vulkan/themespec.c',
+  'client/gui-vulkan/utf8string.c',
+  'client/gui-vulkan/voteinfo_bar.c',
+  'client/gui-vulkan/widget_button.c',
+  'client/gui-vulkan/widget.c',
+  'client/gui-vulkan/widget_checkbox.c',
+  'client/gui-vulkan/widget_combo.c',
+  'client/gui-vulkan/widget_core.c',
+  'client/gui-vulkan/widget_edit.c',
+  'client/gui-vulkan/widget_icon.c',
+  'client/gui-vulkan/widget_label.c',
+  'client/gui-vulkan/widget_scrollbar.c',
+  'client/gui-vulkan/widget_window.c',
+  'client/gui-vulkan/wldlg.c',
+  'client/gui-vulkan/vk3d_core.c',
+  'client/gui-vulkan/vk3d_map.c',
+  'client/gui-vulkan/voxel_art.c',
+  'client/gui-vulkan/img_png.c',
+  'client/gui-vulkan/SDL3_gfx/SDL3_rotozoom.c',
+  vk_shader_headers,
+  clienticon,
+  sources: [verhdr, ems_data],
+  include_directories: [client_inc, sdl3v_gfx_inc],
+  c_args: sdl3v_cargs,
+  dependencies: [sdl3main_dep, audio_dep, vulkan_dep, sdl3v_png_dep,
+                 sdl3v_image_dep, sdl3v_ttf_dep,
+                 net_dep, gettext_dep, mw_extra_dep],
+  link_with: client_common,
+  link_args: ems_largs,
+  name_suffix: ems_suffix,
+  install: true,
+  win_subsystem: 'windows'
+  )
+
+# The 3D client has no themes of its own yet; it reads the gui-sdl3 ones
+# (see get_gui_specific_themes_directories()).
+if not get_option('clients').contains('sdl3')
+  install_data('data/themes/gui-sdl3/human/backgrounds.themespec',
+               'data/themes/gui-sdl3/human/bg2.png',
+               'data/themes/gui-sdl3/human/bg.png',
+               'data/themes/gui-sdl3/human/city_fist.png',
+               'data/themes/gui-sdl3/human/city_fist.tspec',
+               'data/themes/gui-sdl3/human/city.png',
+               'data/themes/gui-sdl3/human/city.tspec',
+               'data/themes/gui-sdl3/human/colors.themespec',
+               'data/themes/gui-sdl3/human/COPYING.DejaVu',
+               'data/themes/gui-sdl3/human/COPYING.fireflysung',
+               'data/themes/gui-sdl3/human/COPYING.sazanami',
+               'data/themes/gui-sdl3/human/COPYING.UnDotum',
+               'data/themes/gui-sdl3/human/DejaVuSans.ttf',
+               'data/themes/gui-sdl3/human/dip_icons.png',
+               'data/themes/gui-sdl3/human/dip_icons.tspec',
+               'data/themes/gui-sdl3/human/fireflysung.ttf',
+               'data/themes/gui-sdl3/human/icons.png',
+               'data/themes/gui-sdl3/human/icons.tspec',
+               'data/themes/gui-sdl3/human/intro.png',
+               'data/themes/gui-sdl3/human/options_bg.png',
+               'data/themes/gui-sdl3/human/sazanami-gothic.ttf',
+               'data/themes/gui-sdl3/human/small_theme_buttons.png',
+               'data/themes/gui-sdl3/human/small_theme_buttons.tspec',
+               'data/themes/gui-sdl3/human/tech_tree.png',
+               'data/themes/gui-sdl3/human/tech_tree.tspec',
+               'data/themes/gui-sdl3/human/theme_boxs.png',
+               'data/themes/gui-sdl3/human/theme_boxs.tspec',
+               'data/themes/gui-sdl3/human/theme_buttons.png',
+               'data/themes/gui-sdl3/human/theme_buttons.tspec',
+               'data/themes/gui-sdl3/human/theme_orders_buttons.png',
+               'data/themes/gui-sdl3/human/theme_orders_buttons.tspec',
+               'data/themes/gui-sdl3/human/theme_scrolls.png',
+               'data/themes/gui-sdl3/human/theme_scrolls.tspec',
+               'data/themes/gui-sdl3/human/theme.themespec',
+               'data/themes/gui-sdl3/human/UnDotum.ttf',
+               'data/themes/gui-sdl3/human/world.png',
+               install_dir: join_paths(get_option('datadir'),
+                                       'freeciv/themes/gui-sdl3/human'))
+endif
 
 endif
 

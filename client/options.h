@@ -136,12 +136,14 @@ struct client_options
   bool gui_gtk4_migrated_from_gtk3_22;
   bool gui_sdl2_migrated_from_sdl;
   bool gui_sdl3_migrated_from_sdl2;
+  bool gui_vulkan_migrated_from_sdl3;
   bool gui_gtk2_migrated_from_2_5;
   bool gui_gtk3_migrated_from_2_5;
   bool gui_qt_migrated_from_2_5;
   bool gui_qt_default_fonts_set;
   bool gui_sdl2_default_screen_size_set;
   bool gui_sdl3_default_screen_size_set;
+  bool gui_vulkan_default_screen_size_set;
 
   bool migrate_fullscreen;
 
@@ -448,6 +450,21 @@ struct client_options
   char gui_sdl3_font_city_productions[64];
   bool gui_sdl3_use_theme_font_size;
   int  gui_sdl3_font_size;
+
+/* gui-vulkan client specific options. */
+#define FC_VULKAN_DEFAULT_THEME_NAME "human"
+  char gui_vulkan_default_theme_name[512];
+  bool gui_vulkan_fullscreen;
+  struct video_mode gui_vulkan_screen;
+  bool gui_vulkan_do_cursor_animation;
+  bool gui_vulkan_use_color_cursors;
+  char gui_vulkan_font_city_names[64];
+  char gui_vulkan_font_city_productions[64];
+  bool gui_vulkan_use_theme_font_size;
+  int  gui_vulkan_font_size;
+  bool gui_vulkan_3d_enabled;
+  bool gui_vulkan_3d_shadows;
+  int  gui_vulkan_3d_lod_bias;
 
 /* gui-qt client specific options. */
 #define FC_QT_DEFAULT_THEME_NAME "NightStalker"

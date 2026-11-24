@@ -103,6 +103,7 @@ struct client_options gui_options = {
   .gui_gtk4_migrated_from_gtk3_22 = FALSE,
   .gui_sdl2_migrated_from_sdl = FALSE,
   .gui_sdl3_migrated_from_sdl2 = FALSE,
+  .gui_vulkan_migrated_from_sdl3 = FALSE,
   .gui_gtk2_migrated_from_2_5 = FALSE,
   .gui_gtk3_migrated_from_2_5 = FALSE,
   .gui_qt_migrated_from_2_5 = FALSE,
@@ -114,6 +115,7 @@ struct client_options gui_options = {
   .gui_qt_default_fonts_set = FALSE,
   .gui_sdl2_default_screen_size_set = FALSE,
   .gui_sdl3_default_screen_size_set = FALSE,
+  .gui_vulkan_default_screen_size_set = FALSE,
 
 /** Local Options: **/
 
@@ -421,6 +423,20 @@ struct client_options gui_options = {
   .gui_sdl3_font_city_productions = "10",
   .gui_sdl3_use_theme_font_size = TRUE,
   .gui_sdl3_font_size = 10,
+
+/* gui-vulkan client specific options. */
+  .gui_vulkan_default_theme_name = FC_VULKAN_DEFAULT_THEME_NAME,
+  .gui_vulkan_fullscreen = FALSE,
+  .gui_vulkan_screen = VIDEO_MODE(1280, 800),
+  .gui_vulkan_do_cursor_animation = TRUE,
+  .gui_vulkan_use_color_cursors = TRUE,
+  .gui_vulkan_font_city_names = "10",
+  .gui_vulkan_font_city_productions = "10",
+  .gui_vulkan_use_theme_font_size = TRUE,
+  .gui_vulkan_font_size = 10,
+  .gui_vulkan_3d_enabled = TRUE,
+  .gui_vulkan_3d_shadows = TRUE,
+  .gui_vulkan_3d_lod_bias = 0,
 
 /* gui-qt client specific options. */
   .gui_qt_fullscreen = FALSE,
@@ -2062,6 +2078,11 @@ static struct client_option client_options[] = {
                          "active theme."),
                       COC_GRAPHICS, GUI_SDL3, FC_SDL3_DEFAULT_THEME_NAME,
                       get_themes_list, theme_reread_callback, 0),
+  GEN_STR_LIST_OPTION(gui_vulkan_default_theme_name, N_("Theme"),
+                      N_("By changing this option you change the "
+                         "active theme."),
+                      COC_GRAPHICS, GUI_VULKAN, FC_VULKAN_DEFAULT_THEME_NAME,
+                      get_themes_list, theme_reread_callback, 0),
   GEN_STR_LIST_OPTION(gui_qt_default_theme_name, N_("Theme"),
                       N_("By changing this option you change the "
                          "active theme."),
@@ -3591,6 +3612,57 @@ static struct client_option client_options[] = {
                     "to this. This option has effect only if theme font sizes "
                     "option is disabled."),
                  COC_FONT, GUI_SDL3, 10, 6, 50, nullptr),
+
+  /* gui-vulkan client specific options. */
+  GEN_BOOL_OPTION(gui_vulkan_fullscreen, N_("Fullscreen"),
+                  N_("If this option is set the client will use the "
+                     "whole screen area for drawing."),
+                  COC_INTERFACE, GUI_VULKAN, FALSE, nullptr),
+  GEN_VIDEO_OPTION(gui_vulkan_screen, N_("Screen resolution"),
+                   N_("This option controls the resolution of the "
+                      "selected screen."),
+                   COC_INTERFACE, GUI_VULKAN, 1280, 800, nullptr),
+  GEN_BOOL_OPTION(gui_vulkan_do_cursor_animation, N_("Do cursor animation"),
+                  N_("If this option is disabled, the cursor will "
+                     "always be displayed as static."),
+                  COC_INTERFACE, GUI_VULKAN, TRUE, nullptr),
+  GEN_BOOL_OPTION(gui_vulkan_use_color_cursors, N_("Use color cursors"),
+                  N_("If this option is disabled, the cursor will "
+                     "always be displayed in black and white."),
+                  COC_INTERFACE, GUI_VULKAN, TRUE, nullptr),
+  GEN_FONT_OPTION(gui_vulkan_font_city_names, "FONT_CITY_NAME",
+                  N_("City Names"),
+                  N_("The size of font used to the display the city names "
+                     "on the map."),
+                  COC_FONT, GUI_VULKAN,
+                  "10", font_changed_callback),
+  GEN_FONT_OPTION(gui_vulkan_font_city_productions, "FONT_CITY_PROD",
+                  N_("City Productions"),
+                  N_("The size of font used to the display the city "
+                     "production names on the map."),
+                  COC_FONT, GUI_VULKAN,
+                  "10", font_changed_callback),
+  GEN_BOOL_OPTION(gui_vulkan_use_theme_font_size, N_("Use theme defined font size"),
+                  N_("Disable this to override base font size set by theme "
+                     "by the setting below."),
+                  COC_FONT, GUI_VULKAN, TRUE, nullptr),
+  GEN_INT_OPTION(gui_vulkan_font_size, N_("Base Font Size"),
+                 N_("Base Font Size. All the fonts' sizes are defined relative "
+                    "to this. This option has effect only if theme font sizes "
+                    "option is disabled."),
+                 COC_FONT, GUI_VULKAN, 10, 6, 50, nullptr),
+  GEN_BOOL_OPTION(gui_vulkan_3d_enabled, N_("3D map view"),
+                  N_("Render the map with the Vulkan 3D voxel renderer "
+                     "instead of the flat 2D sprite map."),
+                  COC_GRAPHICS, GUI_VULKAN, TRUE, nullptr),
+  GEN_BOOL_OPTION(gui_vulkan_3d_shadows, N_("3D shadows"),
+                  N_("Cast shadows from the 3D voxel scenery. "
+                     "Disable this on weak GPUs."),
+                  COC_GRAPHICS, GUI_VULKAN, TRUE, nullptr),
+  GEN_INT_OPTION(gui_vulkan_3d_lod_bias, N_("3D detail distance"),
+                 N_("How far out the 3D renderer keeps full voxel detail. "
+                    "Higher values look better and cost more."),
+                 COC_GRAPHICS, GUI_VULKAN, 0, -3, 5, nullptr),
 
   /* gui-qt client specific options. */
   GEN_BOOL_OPTION(gui_qt_fullscreen, N_("Fullscreen"),

@@ -9,6 +9,8 @@ endif
 
 GUI_SUBDIRS += gui-sdl3
 
+GUI_SUBDIRS += gui-vulkan
+
 if CLIENT_GUI_GTK_3_22
 GUI_SUBDIRS += gui-gtk-3.22
 endif

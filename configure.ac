@@ -490,7 +490,7 @@ for gui in $(echo $clients | $SED 's/,/ /g') ; do
       AC_MSG_WARN([for requested client 'gtk' enabled gtk3.22-client, that has changed since earlier versions and will change again in the future])
       gui_gtk3_22=yes
     else
-      if test ! -d "${srcdir}/client/gui-$gui" || test "$gui" = "sdl3" ; then
+      if test ! -d "${srcdir}/client/gui-$gui" || test "$gui" = "sdl3" || test "$gui" = "vulkan" ; then
         AC_MSG_ERROR([bad value ${gui} for --enable-client])
       fi
       eval "gui_$gui=yes"
@@ -1956,6 +1956,7 @@ AC_CONFIG_FILES([Makefile
           client/include/Makefile
           client/gui-sdl2/Makefile
           client/gui-sdl3/Makefile
+          client/gui-vulkan/Makefile
           client/gui-gtk-3.22/Makefile
           client/gui-gtk-4.0/Makefile
           client/gui-gtk-5.0/Makefile
